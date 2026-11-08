@@ -6,13 +6,14 @@ import { useEffect, useState } from "react";
 import {
   ChevronLeft,
   HandCoins,
+  KeyRound,
   LayoutDashboard,
   Menu,
   Newspaper,
-  Settings,
   Shield,
   Users,
   Wallet,
+  Wrench,
   X,
 } from "lucide-react";
 import { LogoutButton } from "@/components/auth/logout-button";
@@ -21,15 +22,15 @@ import type { PanelRole } from "@/lib/auth/panel-session";
 import type { OrgProfile } from "@/types/org";
 
 const ICONS: Record<string, React.ComponentType<{ size?: number; strokeWidth?: number }>> = {
-  "/panel": LayoutDashboard,
-  "/panel/kampanye": HandCoins,
-  "/panel/transaksi": Wallet,
-  "/panel/donatur": Users,
-  "/panel/pembayaran": Wallet,
-  "/panel/afiliasi": Users,
-  "/panel/website": Newspaper,
-  "/panel/pengaturan": Settings,
-  "/panel/pengguna": Shield,
+  "/dashboard": LayoutDashboard,
+  "/campaigns": HandCoins,
+  "/transactions": Wallet,
+  "/donatur": Users,
+  "/pembayaran": Wallet,
+  "/affiliates": Users,
+  "/website": Newspaper,
+  "/app-config": Wrench,
+  "/users": KeyRound,
 };
 
 export function AppShell({
@@ -74,7 +75,7 @@ export function AppShell({
     return () => mq.removeEventListener("change", apply);
   }, []);
 
-  const active = (href: string) => (href === "/panel" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`));
+  const active = (href: string) => (href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`));
   const showLabels = mobile || !collapsed;
   const width = mobile ? 280 : collapsed ? 64 : 220;
 
@@ -124,7 +125,7 @@ export function AppShell({
             </button>
           )}
         </div>
-        <nav className="min-h-0 flex-1 overflow-y-auto py-1" aria-label="Menu panel">
+        <nav className="min-h-0 flex-1 overflow-y-auto py-1" aria-label="Menu utama">
           {navForRole(userRole, websiteOn).map((group) => (
             <div key={group.group}>
               {showLabels && (
@@ -138,7 +139,7 @@ export function AppShell({
                     key={item.href}
                     href={item.href}
                     title={item.label}
-                    className="flex min-h-11 items-center gap-2.5 py-2 pr-3 pl-3.5 text-[13px] text-white hover:bg-white/10"
+                    className="flex min-h-11 items-center gap-2.5 py-2 pr-3 pl-3.5 text-[13px] hover:bg-white/10"
                     style={{
                       fontWeight: on ? 700 : 400,
                       background: on ? "rgba(255,255,255,.16)" : "transparent",

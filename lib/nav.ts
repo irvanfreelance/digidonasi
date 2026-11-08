@@ -15,33 +15,34 @@ export type NavGroup = {
 const SA: PanelRole[] = ["SUPERADMIN"];
 const BOTH: PanelRole[] = ["SUPERADMIN", "WEBSITE_EDITOR"];
 
+/** Menu panel. Kelompok CRM, blasting, dan HCM tidak ada. */
 export const NAV: NavGroup[] = [
   {
-    group: "Ringkasan",
-    items: [{ href: "/panel", label: "Dasbor", roles: SA }],
+    group: "Overview",
+    items: [{ href: "/dashboard", label: "Dasbor", roles: SA }],
   },
   {
     group: "Donasi",
     items: [
-      { href: "/panel/kampanye", label: "Kampanye", roles: SA },
-      { href: "/panel/transaksi", label: "Transaksi", roles: SA },
-      { href: "/panel/donatur", label: "Donatur", roles: SA },
-      { href: "/panel/pembayaran", label: "Pembayaran", roles: SA },
+      { href: "/campaigns", label: "Kampanye", roles: SA },
+      { href: "/transactions", label: "Transaksi", roles: SA },
+      { href: "/donatur", label: "Donatur", roles: SA },
+      { href: "/pembayaran", label: "Pembayaran", roles: SA },
     ],
   },
   {
     group: "Afiliasi",
-    items: [{ href: "/panel/afiliasi", label: "Persetujuan", roles: SA }],
+    items: [{ href: "/affiliates", label: "Persetujuan", roles: SA }],
   },
   {
     group: "Website",
-    items: [{ href: "/panel/website", label: "Konten", roles: BOTH, websiteOnly: true }],
+    items: [{ href: "/website", label: "Konten", roles: BOTH, websiteOnly: true }],
   },
   {
-    group: "Pengaturan",
+    group: "Konfigurasi",
     items: [
-      { href: "/panel/pengaturan", label: "Lembaga", roles: SA },
-      { href: "/panel/pengguna", label: "Pengguna", roles: SA },
+      { href: "/app-config", label: "Pengaturan lembaga", roles: SA },
+      { href: "/users", label: "Pengguna", roles: SA },
     ],
   },
 ];
@@ -59,7 +60,7 @@ export const DEFAULT_ORG = {
   tagline: process.env.ORG_TAGLINE || "[DEMO] Bukan lembaga sungguhan",
   logoUrl: null as string | null,
   faviconUrl: null as string | null,
-  primaryColor: process.env.ORG_PRIMARY_COLOR || "#01665e",
-  sidebarColor: process.env.ORG_SIDEBAR_COLOR || "#01665e",
+  primaryColor: process.env.ORG_PRIMARY_COLOR || "#01665a",
+  sidebarColor: process.env.ORG_SIDEBAR_COLOR || "#01665a",
   accentColor: process.env.ORG_ACCENT_COLOR || "#2e8b7a",
 };

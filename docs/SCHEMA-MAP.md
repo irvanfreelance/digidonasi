@@ -1,28 +1,38 @@
 # Peta kompatibilitas skema
 
-Sumber yang dijalankan: `lib/db/migrations/0000_foundation.sql`. `drizzle/schema.ts` hanya cermin sebagian. Drizzle Query tidak dipakai aplikasi.
+Sumber yang dijalankan: `lib/db/migrations/0000_foundation.sql`, 50 tabel. `drizzle/schema.ts` mencerminkan nama tabel dan kolom yang sama. Drizzle Query tidak dipakai. `drizzle-kit push` dan `generate` tidak ada di skrip npm; keluarannya, bila dijalankan manual, hanya boleh ke `drizzle/kit`, bukan ke berkas migrasi.
 
-Acuan boilerplate yang bisa dibaca agen ini adalah repo publik `irvanfreelance/erpabps` pada `281a8646b781d21035e7a95feaa9939f294eb1d9` (paket `zains_crm`, Next `16.4.5`, `org_profile`, `app_config`, `users`, `audit_logs`, cookie `crm_ui_session`). Repo privat `irvanfreelance/erpboilerplate` pada SHA `9ad94292402bb5a444ce01346f75d85133b7468d` tidak dapat dibaca token agen ini. Konvensi di bawah mengikuti saudara publik itu dan dokumen tinjauan, bukan tebakan hijau.
+`main` jarak jauh saat paket ini hanya berisi `README.md`. Daftar tabel ada di cabang PR, di berkas SQL di atas, bukan di halaman default GitHub.
+
+Acuan yang dibaca: `https://github.com/irvanfreelance/erpboilerplate` commit `9ad94292402bb5a444ce01346f75d85133b7468d` (`first commit`, 6 November 2026). Bukan `erpabps`.
 
 ## Dipakai ulang
 
 | Boilerplate | Digidonasi | Catatan |
 |---|---|---|
-| `org_profile` satu baris | `org_profile` | Nama, warna, logo, favicon, `is_seed_default` tetap. Ditambah kolom kontak donasi dan `seed_untouched`. |
-| `app_config` | `app_config` | Kunci/nilai/deskripsi/`updated_at` tetap. Ditambah `is_proposal` dan `seed_untouched`. Kunci `website_enabled` ditolak. |
-| `users` | `users` | Satu tabel operator panel. Peran hanya `SUPERADMIN` dan `WEBSITE_EDITOR`. |
-| `audit_logs` | `audit_logs` | `user_id` menunjuk `users`. Ditambah `field_changed`, `ip_address`, `user_agent`. `entity_id` teks agar kunci non-numerik muat. |
+| `org_profile` | `org_profile` | `varchar` nama/warna, `favicon_url`, `is_seed_default`, default `#01665a`. Ditambah kontak donasi dan `seed_untouched`. |
+| `app_config` | `app_config` | `key varchar(100)`, `value`, `description`, `updated_at`. Ditambah `is_proposal` dan `seed_untouched`. Kunci `website_enabled` ditolak. |
+| `users` | `users` | `BIGSERIAL`, `varchar` nama/email/role, `is_active`, `deleted_at`. Peran hanya `SUPERADMIN` dan `WEBSITE_EDITOR`. |
+| `audit_logs` | `audit_logs` | `user_id`, `entity_id bigint`, `field_changed`, `ip_address`, `user_agent`. |
 
 ## Disesuaikan
 
 | Draf SQL | Keputusan |
 |---|---|
 | `admin_users` | Tidak dibuat. Dipetakan ke `users` supaya tidak ada dua tabel operator. |
-| `status` ACTIVE/INACTIVE | Menjadi `is_active`. `false` sama dengan INACTIVE. |
+| `status` ACTIVE/INACTIVE | Menjadi `is_active`. `false` sama dengan INACTIVE. Satu `CHECK` status ikut hilang karena kolomnya tidak dibuat. |
 | `actor_admin_id` | Menjadi `audit_logs.user_id`. |
-| `password_hash` | Tidak ada. Masuk Google menyusul hari 2. |
-| `user_tokens` | Tidak dibuat. Bukan sesi sementara. |
-| PK `BIGSERIAL` saudara HRD | Identitas `bigint GENERATED ALWAYS AS IDENTITY` mengikuti draf yang sudah diuji, setara urutan bigint. |
+| `password_hash` | Tidak dibuat. Bukan sandi dan bukan login hari 1. |
+| `user_tokens` | Tidak dibuat. Bukan sesi. |
+| `audit_logs.donor_id` | Tidak dibuat. Audit hanya pelaku panel. |
+| Peran `admin`, `supervisor`, `tim_blast` | Diganti dua peran panel yang disetujui. |
+| PK | `BIGSERIAL`, sama seperti boilerplate. |
+
+## Sengaja tidak dibawa
+
+Tabel dan menu CRM: `programs`, `campaigns` versi CRM, `donors` versi CRM, `transactions` versi CRM, `field_definitions`, `donor_dynamic_fields`, `donor_search_index`, `prospect_notes`, `vendor_profiles`, `blast_batches`, `blast_records`, `saved_segments`, `tag_definitions`, `distribute_batches`, `data_imports`, `extension_configs`. Tidak ada FINS, payroll, atau HCM. Cookie penanda UI dan fallback admin pertama tidak dipasang. Logo serta nama Relawan Nusantara tidak disalin.
+
+`donors`, `campaigns`, dan `transactions` pada basis ini adalah tabel donasi baru, bukan tabel CRM itu.
 
 ## Baru
 

@@ -39,7 +39,7 @@ test("editor tidak membuka transaksi dan mati bersama website", () => {
   assert.equal(panelAllows("WEBSITE_EDITOR", "website"), false);
   assert.equal(panelAllows("SUPERADMIN", "transaksi"), true);
   assert.equal(navForRole("WEBSITE_EDITOR", false).length, 0);
-  assert.equal(navForRole("WEBSITE_EDITOR", true)[0]?.items[0]?.href, "/panel/website");
+  assert.equal(navForRole("WEBSITE_EDITOR", true)[0]?.items[0]?.href, "/website");
   assert.equal(navForRole("SUPERADMIN", false).some((group) => group.group === "Website"), false);
 });
 

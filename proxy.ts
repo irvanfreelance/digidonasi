@@ -2,12 +2,34 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { isWebsitePath, websiteEnabled } from "@/lib/env";
 
-export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+const ADMIN_PREFIXES = [
+  "/dashboard",
+  "/campaigns",
+  "/transactions",
+  "/donatur",
+  "/pembayaran",
+  "/affiliates",
+  "/website",
+  "/users",
+  "/app-config",
+];
 
-  if (pathname.startsWith("/panel") && pathname !== "/panel/login") {
-    const login = new URL("/panel/login", request.url);
-    login.searchParams.set("next", pathname);
+function isAdminPath(pathname: string) {
+  return ADMIN_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+export function proxy(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+
+  if (pathname === "/panel" || pathname.startsWith("/panel/")) {
+    const login = new URL("/login", request.url);
+    login.searchParams.set("next", `${pathname}${search}`);
+    return NextResponse.redirect(login);
+  }
+
+  if (isAdminPath(pathname)) {
+    const login = new URL("/login", request.url);
+    login.searchParams.set("next", `${pathname}${search}`);
     return NextResponse.redirect(login);
   }
 

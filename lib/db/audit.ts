@@ -15,7 +15,7 @@ export async function logAudit(input: {
       user_id, action, entity_type, entity_id, field_changed,
       value_before, value_after, source
     ) VALUES (
-      $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8
+      $1, $2, $3, CASE WHEN $4 ~ '^[0-9]+$' THEN $4::bigint ELSE NULL END, $5, $6::jsonb, $7::jsonb, $8
     )`,
     [
       input.userId ?? null,
