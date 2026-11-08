@@ -10,7 +10,7 @@ INSERT INTO org_profile (
   '[DEMO] Bukan lembaga sungguhan',
   '[DEMO] Teks kaki beranda donasi. Sunting sebelum diterbitkan.',
   '[DEMO] Alamat contoh, bukan kantor operasional',
-  '#01665e', '#01665e', '#2e8b7a', true
+  '#01665a', '#01665a', '#2e8b7a', true
 )
 ON CONFLICT (id) DO UPDATE SET
   nama = EXCLUDED.nama,

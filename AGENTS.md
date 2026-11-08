@@ -15,6 +15,8 @@ Berlaku untuk repo ini mulai 8 November 2026. Paket yang sudah ada hanya hari 1.
 
 - Jangan memulihkan cookie sesi UI CRM, fallback admin-pertama, `password_hash`, atau peran `FINANCE`.
 - `getPanelSession` hari 1 mengembalikan null. Jangan menganggap panel aman hanya karena tombol Google terlihat.
+- Jangan memulihkan fallback admin pertama dari `lib/auth/session.ts` boilerplate.
+- Shell admin mengikuti `app/(dashboard)` dan `/login` pada commit `9ad94292402bb5a444ce01346f75d85133b7468d`. `/panel` hanya mengalihkan ke `/login`.
 - Jangan menyalin rahasia, `DATABASE_URL` produksi, atau data Darul Hikam ke repo, seed, atau log.
 - Bootstrap superadmin hanya jika `BOOTSTRAP_ADMIN_OPT_IN=true` bersama nama dan email dari env. Jangan menulis email orang ke dokumen.
 

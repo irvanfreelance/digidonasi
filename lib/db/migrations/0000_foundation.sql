@@ -3,6 +3,11 @@
 -- Draf SQL admin_users dipetakan ke users. Bukan tabel kedua.
 -- PostgreSQL 17. Tanpa DROP tabel, tanpa sandi, tanpa website_enabled di basis.
 
+-- Ekstensi mengikuti erpboilerplate 9ad94292402bb5a444ce01346f75d85133b7468d.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS btree_gin;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+
 -- Dipasang oleh npm run db:migrate pada basis klien yang kosong.
 -- Menolak nama basis yang memuat darul atau hikam, dan menolak tabel lain di public.
 -- WEBSITE_ENABLED bukan kolom dan bukan baris app_config. Hak paket ada di env server.
@@ -318,17 +323,17 @@ CREATE TABLE IF NOT EXISTS digidonasi_schema (
 CREATE TABLE IF NOT EXISTS org_profile (
   id smallint PRIMARY KEY CHECK (id = 1),
   seed_key text NOT NULL UNIQUE,
-  nama text NOT NULL,
-  nama_singkat text NOT NULL,
-  tagline text NOT NULL,
+  nama varchar(200) NOT NULL,
+  nama_singkat varchar(40) NOT NULL,
+  tagline varchar(200) NOT NULL DEFAULT '',
   short_description text NOT NULL,
   address text NOT NULL,
   logo_url text,
   favicon_url text,
   video_url text,
-  primary_color text NOT NULL,
-  sidebar_color text NOT NULL,
-  accent_color text NOT NULL,
+  primary_color varchar(7) NOT NULL DEFAULT '#01665a',
+  sidebar_color varchar(7) NOT NULL DEFAULT '#01665a',
+  accent_color varchar(7) NOT NULL DEFAULT '#2e8b7a',
   facebook_url text,
   instagram_url text,
   whatsapp_number text,
@@ -342,21 +347,22 @@ CREATE TABLE IF NOT EXISTS org_profile (
 );
 
 CREATE TABLE IF NOT EXISTS app_config (
-  key text PRIMARY KEY,
+  key varchar(100) PRIMARY KEY,
   value text NOT NULL,
-  description text NOT NULL,
-  is_proposal boolean NOT NULL,
+  description text,
+  is_proposal boolean NOT NULL DEFAULT false,
   seed_untouched boolean NOT NULL DEFAULT true,
   updated_at timestamptz NOT NULL DEFAULT now(),
   CHECK (key <> 'website_enabled')
 );
+COMMENT ON TABLE app_config IS 'Konfigurasi lembaga. Bukan hak paket website.';
 
 CREATE TABLE IF NOT EXISTS users (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  nama text NOT NULL,
-  email text NOT NULL,
-  google_sub text,
-  role text NOT NULL,
+  id BIGSERIAL PRIMARY KEY,
+  nama varchar(200) NOT NULL,
+  email varchar(255) NOT NULL,
+  google_sub varchar(255),
+  role varchar(50) NOT NULL,
   is_active boolean NOT NULL DEFAULT false,
   last_login_at timestamptz,
   seed_key text UNIQUE,
@@ -375,19 +381,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_uq ON users (lower(email));
 CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_uq ON users (google_sub) WHERE google_sub IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS audit_logs (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  actor_admin_id bigint REFERENCES users (id),
-  action text NOT NULL,
-  entity_type text NOT NULL,
-  entity_id text,
+  id BIGSERIAL PRIMARY KEY,
+  user_id bigint REFERENCES users (id),
+  action varchar(50) NOT NULL,
+  entity_type varchar(50) NOT NULL,
+  entity_id bigint,
+  field_changed varchar(100),
   value_before jsonb,
   value_after jsonb,
-  source text NOT NULL DEFAULT 'web_app',
+  source varchar(50) NOT NULL DEFAULT 'web_app',
+  ip_address varchar(50),
+  user_agent text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+COMMENT ON TABLE audit_logs IS 'Hanya bertambah. Pelaku adalah users. Kolom donor_id CRM tidak dipakai.';
 
 CREATE TABLE IF NOT EXISTS donors (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   nama text NOT NULL,
   email text,
   google_sub text,
@@ -405,7 +415,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS donors_google_sub_uq ON donors (google_sub) WH
 CREATE UNIQUE INDEX IF NOT EXISTS donors_phone_uq ON donors (phone_canonical) WHERE phone_canonical IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS affiliates (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   nama text NOT NULL,
   email text NOT NULL,
   google_sub text,
@@ -421,7 +431,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS affiliates_email_lower_uq ON affiliates (lower
 CREATE UNIQUE INDEX IF NOT EXISTS affiliates_google_sub_uq ON affiliates (google_sub) WHERE google_sub IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS categories (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   name text NOT NULL,
   slug text NOT NULL UNIQUE,
@@ -432,7 +442,7 @@ CREATE TABLE IF NOT EXISTS categories (
 );
 
 CREATE TABLE IF NOT EXISTS campaigns (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   category_id bigint NOT NULL REFERENCES categories (id),
   slug text NOT NULL UNIQUE,
@@ -468,7 +478,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
 );
 
 CREATE TABLE IF NOT EXISTS campaign_variants (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   campaign_id bigint NOT NULL REFERENCES campaigns (id),
   name text NOT NULL,
@@ -492,7 +502,7 @@ CREATE TABLE IF NOT EXISTS campaign_bundles (
 );
 
 CREATE TABLE IF NOT EXISTS campaign_updates (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   campaign_id bigint NOT NULL REFERENCES campaigns (id),
   title text NOT NULL,
@@ -511,7 +521,7 @@ CREATE TABLE IF NOT EXISTS campaign_stats (
 );
 
 CREATE TABLE IF NOT EXISTS campaign_qris_static (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   campaign_id bigint NOT NULL REFERENCES campaigns (id),
   status text NOT NULL DEFAULT 'DISABLED',
@@ -538,7 +548,7 @@ CREATE TABLE IF NOT EXISTS payment_providers (
 );
 
 CREATE TABLE IF NOT EXISTS payment_methods (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   code text NOT NULL UNIQUE,
   name text NOT NULL,
@@ -562,7 +572,7 @@ CREATE TABLE IF NOT EXISTS payment_methods (
 );
 
 CREATE TABLE IF NOT EXISTS payment_instructions (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   payment_method_id bigint NOT NULL REFERENCES payment_methods (id),
   title text NOT NULL,
@@ -572,7 +582,7 @@ CREATE TABLE IF NOT EXISTS payment_instructions (
 );
 
 CREATE TABLE IF NOT EXISTS invoices (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   invoice_code text NOT NULL UNIQUE,
   donor_id bigint REFERENCES donors (id) ON DELETE SET NULL,
   payment_method_id bigint NOT NULL REFERENCES payment_methods (id),
@@ -598,7 +608,7 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   invoice_id bigint NOT NULL REFERENCES invoices (id),
   campaign_id bigint NOT NULL REFERENCES campaigns (id),
   variant_id bigint REFERENCES campaign_variants (id),
@@ -613,14 +623,14 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 
 CREATE TABLE IF NOT EXISTS transaction_qurban_names (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   transaction_id bigint NOT NULL REFERENCES transactions (id),
   mudhohi_name text NOT NULL,
   CHECK (length(btrim(mudhohi_name)) > 0)
 );
 
 CREATE TABLE IF NOT EXISTS payment_events (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   provider_code text NOT NULL REFERENCES payment_providers (code),
   provider_event_id text NOT NULL,
   invoice_id bigint NOT NULL REFERENCES invoices (id),
@@ -634,7 +644,7 @@ CREATE TABLE IF NOT EXISTS payment_events (
 );
 
 CREATE TABLE IF NOT EXISTS notification_templates (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   event_trigger text NOT NULL,
   channel text NOT NULL,
@@ -648,7 +658,7 @@ CREATE TABLE IF NOT EXISTS notification_templates (
 );
 
 CREATE TABLE IF NOT EXISTS notification_outbox (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   template_id bigint REFERENCES notification_templates (id),
   dedupe_key text NOT NULL UNIQUE,
   status text NOT NULL DEFAULT 'pending',
@@ -666,7 +676,7 @@ CREATE TABLE IF NOT EXISTS tracking_public_ids (
 );
 
 CREATE TABLE IF NOT EXISTS pixel_events (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   screen_name text NOT NULL,
   meta_event text,
@@ -701,7 +711,7 @@ CREATE TABLE IF NOT EXISTS website_blocks (
 );
 
 CREATE TABLE IF NOT EXISTS web_article_categories (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   name text NOT NULL,
   slug text NOT NULL UNIQUE,
@@ -711,7 +721,7 @@ CREATE TABLE IF NOT EXISTS web_article_categories (
 );
 
 CREATE TABLE IF NOT EXISTS web_articles (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   category_id bigint REFERENCES web_article_categories (id),
   slug text NOT NULL UNIQUE,
@@ -725,7 +735,7 @@ CREATE TABLE IF NOT EXISTS web_articles (
 );
 
 CREATE TABLE IF NOT EXISTS web_tags (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   name text NOT NULL,
   slug text NOT NULL UNIQUE,
@@ -739,7 +749,7 @@ CREATE TABLE IF NOT EXISTS web_article_tags (
 );
 
 CREATE TABLE IF NOT EXISTS web_testimonials (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   person_label text NOT NULL,
   quote text NOT NULL,
@@ -750,7 +760,7 @@ CREATE TABLE IF NOT EXISTS web_testimonials (
 );
 
 CREATE TABLE IF NOT EXISTS web_partners (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   name text NOT NULL,
   publication_status text NOT NULL DEFAULT 'DRAFT',
@@ -760,7 +770,7 @@ CREATE TABLE IF NOT EXISTS web_partners (
 );
 
 CREATE TABLE IF NOT EXISTS web_care_categories (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   title text NOT NULL,
   summary text NOT NULL,
@@ -771,7 +781,7 @@ CREATE TABLE IF NOT EXISTS web_care_categories (
 );
 
 CREATE TABLE IF NOT EXISTS web_impact_categories (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   title text NOT NULL,
   summary text NOT NULL,
@@ -782,7 +792,7 @@ CREATE TABLE IF NOT EXISTS web_impact_categories (
 );
 
 CREATE TABLE IF NOT EXISTS web_impact_metrics (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   metric_key text NOT NULL UNIQUE,
   label text NOT NULL,
@@ -795,7 +805,7 @@ CREATE TABLE IF NOT EXISTS web_impact_metrics (
 );
 
 CREATE TABLE IF NOT EXISTS web_distribution_points (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   label text NOT NULL,
   latitude numeric(8,5),
@@ -818,7 +828,7 @@ CREATE TABLE IF NOT EXISTS web_about_content (
 );
 
 CREATE TABLE IF NOT EXISTS web_history_timeline (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   year_label text NOT NULL,
   title text NOT NULL,
@@ -830,7 +840,7 @@ CREATE TABLE IF NOT EXISTS web_history_timeline (
 );
 
 CREATE TABLE IF NOT EXISTS web_mission_points (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   title text NOT NULL,
   body text NOT NULL,
@@ -841,7 +851,7 @@ CREATE TABLE IF NOT EXISTS web_mission_points (
 );
 
 CREATE TABLE IF NOT EXISTS web_team_members (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   role_label text NOT NULL,
   display_name text NOT NULL,
@@ -852,7 +862,7 @@ CREATE TABLE IF NOT EXISTS web_team_members (
 );
 
 CREATE TABLE IF NOT EXISTS web_legality (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   title text NOT NULL,
   document_number text NOT NULL,
@@ -863,7 +873,7 @@ CREATE TABLE IF NOT EXISTS web_legality (
 );
 
 CREATE TABLE IF NOT EXISTS web_faqs (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   question text NOT NULL,
   answer text NOT NULL,
@@ -874,7 +884,7 @@ CREATE TABLE IF NOT EXISTS web_faqs (
 );
 
 CREATE TABLE IF NOT EXISTS web_financial_reports (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   title text NOT NULL,
   period_label text NOT NULL,
@@ -885,7 +895,7 @@ CREATE TABLE IF NOT EXISTS web_financial_reports (
 );
 
 CREATE TABLE IF NOT EXISTS web_fund_allocations (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   campaign_id bigint REFERENCES campaigns (id),
   title text NOT NULL,
@@ -896,7 +906,7 @@ CREATE TABLE IF NOT EXISTS web_fund_allocations (
 );
 
 CREATE TABLE IF NOT EXISTS web_bank_accounts (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   seed_key text NOT NULL UNIQUE,
   bank_name text NOT NULL,
   account_number text NOT NULL,
@@ -911,7 +921,7 @@ CREATE TABLE IF NOT EXISTS web_bank_accounts (
 );
 
 CREATE TABLE IF NOT EXISTS affiliate_clicks (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   affiliate_id bigint NOT NULL REFERENCES affiliates (id),
   campaign_id bigint NOT NULL REFERENCES campaigns (id),
   click_token text NOT NULL UNIQUE,
@@ -928,7 +938,7 @@ CREATE TABLE IF NOT EXISTS affiliate_campaign_commissions (
 );
 
 CREATE TABLE IF NOT EXISTS payout_requests (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   affiliate_id bigint NOT NULL REFERENCES affiliates (id),
   idempotency_key text NOT NULL UNIQUE,
   amount_rupiah bigint NOT NULL,
@@ -941,7 +951,7 @@ CREATE TABLE IF NOT EXISTS payout_requests (
 );
 
 CREATE TABLE IF NOT EXISTS affiliate_ledger (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   affiliate_id bigint NOT NULL REFERENCES affiliates (id),
   idempotency_key text NOT NULL UNIQUE,
   movement text NOT NULL,
@@ -971,6 +981,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS affiliate_ledger_one_settle
 
 
 -- Indeks daftar berhalaman. Bukan partisi.
+CREATE INDEX IF NOT EXISTS idx_users_role ON users (role) WHERE is_active = TRUE AND deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_users_active ON users (is_active) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_campaigns_public_list ON campaigns (publication_status, sort_order, id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_category ON campaigns (category_id, publication_status, id);
@@ -1187,9 +1198,9 @@ BEGIN
   PERFORM digidonasi_require_column('payment_providers', 'adapter_status', 'text');
   PERFORM digidonasi_require_column('donation_blocks', 'seed_key', 'text');
   PERFORM digidonasi_require_column('website_blocks', 'items', 'jsonb');
-  PERFORM digidonasi_require_column('users', 'role', 'text');
+  PERFORM digidonasi_require_column('users', 'role', 'varchar');
   PERFORM digidonasi_require_column('users', 'is_active', 'bool');
-  PERFORM digidonasi_require_column('users', 'google_sub', 'text');
+  PERFORM digidonasi_require_column('users', 'google_sub', 'varchar');
   PERFORM digidonasi_require_column('org_profile', 'is_seed_default', 'bool');
   IF to_regclass('public.admin_users') IS NOT NULL THEN
     RAISE EXCEPTION 'users sudah memetakan admin panel; admin_users tidak boleh dibuat';

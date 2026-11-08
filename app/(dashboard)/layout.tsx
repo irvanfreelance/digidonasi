@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { AppShell } from "@/components/layout/sidebar";
 import { getPanelSession } from "@/lib/auth/panel-session";
 import { websiteEnabled } from "@/lib/env";
@@ -7,9 +6,9 @@ import { fallbackOrg } from "@/types/org";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProtectedPanelLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getPanelSession();
-  if (!session) redirect("/panel/login");
+  if (!session) redirect("/login");
   const org = fallbackOrg();
   return (
     <div
@@ -28,7 +27,7 @@ export default async function ProtectedPanelLayout({ children }: { children: Rea
         websiteOn={websiteEnabled()}
         org={org}
       >
-        <NuqsAdapter>{children}</NuqsAdapter>
+        {children}
       </AppShell>
     </div>
   );

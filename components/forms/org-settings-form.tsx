@@ -50,43 +50,59 @@ export function OrgSettingsForm({ org }: { org: OrgProfile }) {
 
   return (
     <form
-      className="max-w-xl rounded-2xl bg-white p-4 shadow-sm"
+      className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_280px]"
       onSubmit={(event) => {
         event.preventDefault();
         void save();
       }}
     >
-      <label className={field}>
-        Nama
-        <input className={input} value={form.nama} onChange={(event) => set("nama", event.target.value)} />
-      </label>
-      <label className={field}>
-        Nama singkat
-        <input className={input} value={form.namaSingkat} onChange={(event) => set("namaSingkat", event.target.value)} />
-      </label>
-      <label className={field}>
-        Tagline
-        <input className={input} value={form.tagline} onChange={(event) => set("tagline", event.target.value)} />
-      </label>
-      <label className={field}>
-        URL logo
-        <input className={input} value={form.logoUrl} onChange={(event) => set("logoUrl", event.target.value)} />
-      </label>
-      <label className={field}>
-        URL favicon
-        <input className={input} value={form.faviconUrl} onChange={(event) => set("faviconUrl", event.target.value)} />
-      </label>
-      <div className="mb-4 grid grid-cols-3 gap-2">
-        {(["primaryColor", "sidebarColor", "accentColor"] as const).map((key) => (
-          <label key={key} className="text-[12px] text-[#555]">
-            {key === "primaryColor" ? "Utama" : key === "sidebarColor" ? "Sidebar" : "Aksen"}
-            <input className={`${input} h-11`} type="color" value={form[key]} onChange={(event) => set(key, event.target.value)} />
-          </label>
-        ))}
+      <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <label className={field}>
+          Nama
+          <input className={input} value={form.nama} onChange={(event) => set("nama", event.target.value)} />
+        </label>
+        <label className={field}>
+          Nama singkat
+          <input className={input} value={form.namaSingkat} onChange={(event) => set("namaSingkat", event.target.value)} />
+        </label>
+        <label className={field}>
+          Tagline
+          <input className={input} value={form.tagline} onChange={(event) => set("tagline", event.target.value)} />
+        </label>
+        <label className={field}>
+          URL logo
+          <input className={input} value={form.logoUrl} onChange={(event) => set("logoUrl", event.target.value)} placeholder="Atau tempel URL publik" />
+        </label>
+        <label className={field}>
+          URL favicon
+          <input className={input} value={form.faviconUrl} onChange={(event) => set("faviconUrl", event.target.value)} placeholder="Kosong = pakai logo" />
+        </label>
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {(["primaryColor", "sidebarColor", "accentColor"] as const).map((key) => (
+            <label key={key} className="block text-[12px] text-[#666]">
+              {key === "primaryColor" ? "Utama" : key === "sidebarColor" ? "Sidebar" : "Aksen"}
+              <input className={`${input} h-11`} type="color" value={form[key]} onChange={(event) => set(key, event.target.value)} />
+            </label>
+          ))}
+        </div>
+        <button type="submit" className={btnPrimary} disabled={saving} style={{ background: form.primaryColor }}>
+          {saving ? "Menyimpan…" : "Simpan"}
+        </button>
       </div>
-      <button type="submit" className={btnPrimary} disabled={saving}>
-        {saving ? "Menyimpan…" : "Simpan"}
-      </button>
+      <div className="overflow-hidden rounded-[10px] shadow-sm">
+        <div className="p-4 text-white" style={{ background: form.sidebarColor }}>
+          <div className="text-[13px] font-bold">{form.namaSingkat}</div>
+          <div className="text-[10px] opacity-70">{form.tagline}</div>
+          <div className="mt-3 rounded bg-white/15 px-2 py-1.5 text-[12px] font-bold">Dasbor</div>
+          <div className="mt-1 px-2 py-1.5 text-[12px] opacity-80">Kampanye</div>
+        </div>
+        <div className="bg-white p-3 text-[12px]">
+          <div className="font-bold" style={{ color: form.primaryColor }}>{form.nama}</div>
+          <div className="mt-2 inline-block rounded-xl px-2 py-0.5 text-[11px] font-semibold" style={{ background: `${form.accentColor}20`, color: form.accentColor }}>
+            Preview aksen
+          </div>
+        </div>
+      </div>
     </form>
   );
 }

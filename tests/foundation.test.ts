@@ -111,6 +111,42 @@ test("pasang, seed ulang, dan suntingan bertahan", async () => {
   assert.equal(Number((await client.query("SELECT count(*)::int AS n FROM users")).rows[0].n), 1);
   const configEmail = await client.query("SELECT value FROM app_config WHERE key = 'bootstrap_admin_email'");
   assert.equal(configEmail.rows[0].value, "");
+  const idDefault = await client.query(
+    "SELECT column_default FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'id'",
+  );
+  assert.match(String(idDefault.rows[0].column_default), /nextval/);
+  const auditCols = await client.query(
+    "SELECT column_name FROM information_schema.columns WHERE table_name = 'audit_logs'",
+  );
+  const auditNames = auditCols.rows.map((row) => row.column_name);
+  assert.equal(auditNames.includes("user_id"), true);
+  assert.equal(auditNames.includes("donor_id"), false);
+  assert.equal(auditNames.includes("actor_admin_id"), false);
+  const secrets = await client.query(
+    "SELECT count(*)::int AS n FROM information_schema.columns WHERE column_name = 'password_hash'",
+  );
+  assert.equal(secrets.rows[0].n, 0);
+  assert.equal((await client.query("SELECT to_regclass('public.user_tokens') AS t")).rows[0].t, null);
+  assert.equal((await client.query("SELECT to_regclass('public.programs') AS t")).rows[0].t, null);
+  assert.equal((await client.query("SELECT to_regclass('public.employees') AS t")).rows[0].t, null);
+  const catalog = await client.query(
+    "SELECT relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'r' ORDER BY 1",
+  );
+  assert.equal(catalog.rows.length, 50);
+  for (const name of [
+    "campaign_variants",
+    "campaign_bundles",
+    "transaction_qurban_names",
+    "campaign_qris_static",
+    "payment_events",
+    "affiliate_clicks",
+    "affiliate_ledger",
+    "payout_requests",
+    "donation_blocks",
+    "website_blocks",
+  ]) {
+    assert.equal(catalog.rows.some((row) => row.relname === name), true, name);
+  }
   await client.end();
 });
 
