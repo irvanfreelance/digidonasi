@@ -1,56 +1,33 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { isWebsitePath, websiteEnabled } from "@/lib/env";
-
-const ADMIN_PREFIXES = [
-  "/dashboard",
-  "/campaigns",
-  "/transactions",
-  "/donatur",
-  "/pembayaran",
-  "/affiliates",
-  "/website",
-  "/users",
-  "/app-config",
-];
-
-function isAdminPath(pathname: string) {
-  return ADMIN_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-}
+import { gate } from "@/lib/auth/access";
+import { cookieJar } from "@/lib/auth/flow";
+import { websiteEnabled } from "@/lib/env";
 
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
-
-  if (pathname === "/panel" || pathname.startsWith("/panel/")) {
-    const login = new URL("/login", request.url);
-    login.searchParams.set("next", `${pathname}${search}`);
-    return NextResponse.redirect(login);
+  if (pathname === "/login") {
+    const next = new URL("/panel/login", request.url);
+    if (search) next.search = search;
+    return NextResponse.redirect(next);
   }
-
-  if (isAdminPath(pathname)) {
-    const login = new URL("/login", request.url);
-    login.searchParams.set("next", `${pathname}${search}`);
-    return NextResponse.redirect(login);
+  const decision = gate(pathname, cookieJar(request.headers.get("cookie")), websiteEnabled(), request.method);
+  if (decision.kind === "redirect") {
+    return NextResponse.redirect(new URL(decision.url, request.url));
   }
-
-  if (!websiteEnabled() && isWebsitePath(pathname)) {
-    return new NextResponse("Not Found", {
-      status: 404,
-      headers: { "Cache-Control": "no-store", "Content-Type": "text/plain; charset=utf-8" },
+  if (decision.kind === "deny") {
+    const headers = { "Cache-Control": "no-store" };
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: decision.message }, { status: decision.status, headers });
+    }
+    return new NextResponse(decision.message, {
+      status: decision.status,
+      headers: { ...headers, "Content-Type": "text/plain; charset=utf-8" },
     });
   }
-
-  if (!websiteEnabled() && pathname.startsWith("/api/website")) {
-    return NextResponse.json(
-      { error: "Not Found" },
-      { status: 404, headers: { "Cache-Control": "no-store" } },
-    );
+  if (pathname === "/panel" && decision.session?.role === "SUPERADMIN") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
-
-  if (pathname.startsWith("/api/panel")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   return NextResponse.next();
 }
 

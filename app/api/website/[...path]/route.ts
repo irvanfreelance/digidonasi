@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
-import { websiteEnabled } from "@/lib/env";
+import { blocked, decide } from "@/lib/auth/http";
 
-function closed() {
-  if (!websiteEnabled()) {
-    return NextResponse.json({ error: "Not Found" }, { status: 404, headers: { "Cache-Control": "no-store" } });
-  }
-  return NextResponse.json({ error: "Kerangka hari 1. API website belum diimplementasikan." }, { status: 501 });
+function guard(request: Request) {
+  const denied = blocked(decide(request));
+  return denied ?? NextResponse.json({ error: "CMS menyusul pada hari 6." }, { status: 501 });
 }
 
-export function GET() { return closed(); }
-export function POST() { return closed(); }
-export function PUT() { return closed(); }
+export function GET(request: Request) {
+  return guard(request);
+}
+
+export function POST(request: Request) {
+  return guard(request);
+}
+
+export function PUT(request: Request) {
+  return guard(request);
+}
