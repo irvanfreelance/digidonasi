@@ -1,21 +1,29 @@
-import { unauthorized } from "@/lib/api/http";
+import { NextResponse } from "next/server";
+import { blocked, decide } from "@/lib/auth/http";
+import { notImplemented } from "@/lib/api/http";
 
-export function GET() {
-  return unauthorized();
+function guard(request: Request) {
+  const decision = decide(request);
+  return blocked(decision) ?? NextResponse.json({ ok: true, role: decision.kind === "allow" ? decision.session?.role : null });
 }
 
-export function POST() {
-  return unauthorized();
+export function GET(request: Request) {
+  return guard(request);
 }
 
-export function PUT() {
-  return unauthorized();
+export function POST(request: Request) {
+  const denied = blocked(decide(request));
+  return denied ?? notImplemented("panel");
 }
 
-export function PATCH() {
-  return unauthorized();
+export function PUT(request: Request) {
+  return POST(request);
 }
 
-export function DELETE() {
-  return unauthorized();
+export function PATCH(request: Request) {
+  return POST(request);
+}
+
+export function DELETE(request: Request) {
+  return POST(request);
 }

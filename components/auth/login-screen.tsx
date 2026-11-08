@@ -14,13 +14,24 @@ function GoogleMark() {
   );
 }
 
-export function LoginScreen({ org }: { org: OrgProfile }) {
+export function LoginScreen({
+  org,
+  title = "Panel",
+  notice,
+  href,
+  configured,
+}: {
+  org: OrgProfile;
+  title?: string;
+  notice: string;
+  href: string;
+  configured: boolean;
+}) {
   const [logoOk, setLogoOk] = useState(true);
   const logoSrc = org.logo_url
     ? `${org.logo_url}${org.logo_url.includes("?") ? "&" : "?"}v=${encodeURIComponent(String(org.updated_at ?? "1"))}`
     : "";
 
-  const notice = "Masuk Google panel belum dipasang. Tidak ada sesi, cookie, atau admin pertama yang dianggap masuk.";
   const logo = logoSrc && logoOk ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={logoSrc} alt="" className="h-8 max-w-[148px] object-contain" onError={() => setLogoOk(false)} />
@@ -47,10 +58,17 @@ export function LoginScreen({ org }: { org: OrgProfile }) {
         </div>
         <div className="relative">
           <p className="mb-3 text-[13px] text-white/90">{notice}</p>
-          <button type="button" disabled className="inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#dadce0] bg-white px-4 text-[15px] font-semibold text-[#3c4043] opacity-60">
-            <GoogleMark />
-            Masuk dengan Google
-          </button>
+          {configured ? (
+            <a href={href} className="inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#dadce0] bg-white px-4 text-[15px] font-semibold text-[#3c4043] shadow-sm">
+              <GoogleMark />
+              Masuk dengan Google
+            </a>
+          ) : (
+            <button type="button" disabled className="inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-[#dadce0] bg-white px-4 text-[15px] font-semibold text-[#3c4043] opacity-60">
+              <GoogleMark />
+              Google belum dikonfigurasi
+            </button>
+          )}
         </div>
         <div />
       </div>
@@ -66,12 +84,19 @@ export function LoginScreen({ org }: { org: OrgProfile }) {
         </section>
         <section className="flex flex-1 items-center justify-center bg-[#f4f5f7] px-8 py-8">
           <div className="w-full max-w-[420px] rounded-2xl bg-white p-8 shadow-sm">
-            <h2 className="m-0 text-[22px] font-bold text-[var(--primary)]">Panel</h2>
+            <h2 className="m-0 text-[22px] font-bold text-[var(--primary)]">{title}</h2>
             <p className="mt-3 text-[13px] leading-relaxed text-[#555]">{notice}</p>
-            <button type="button" disabled className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-3 rounded-xl border border-[#dadce0] bg-white px-4 text-[14px] font-semibold text-[#3c4043] opacity-60">
-              <GoogleMark />
-              Masuk dengan Google
-            </button>
+            {configured ? (
+              <a href={href} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-3 rounded-xl border border-[#dadce0] bg-white px-4 text-[14px] font-semibold text-[#3c4043] shadow-sm">
+                <GoogleMark />
+                Masuk dengan Google
+              </a>
+            ) : (
+              <button type="button" disabled className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-3 rounded-xl border border-[#dadce0] bg-white px-4 text-[14px] font-semibold text-[#3c4043] opacity-60">
+                <GoogleMark />
+                Google belum dikonfigurasi
+              </button>
+            )}
           </div>
         </section>
       </div>

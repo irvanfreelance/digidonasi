@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getPanelSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/panel/login");
   const org = fallbackOrg();
   return (
     <div

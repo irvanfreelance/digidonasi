@@ -1,8 +1,11 @@
-import { LoginScreen } from "@/components/auth/login-screen";
-import { fallbackOrg } from "@/types/org";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "Masuk panel", description: "Pintu panel. Google menyusul hari 2." };
-
-export default function LoginPage() {
-  return <LoginScreen org={fallbackOrg()} />;
+export default async function LoginAlias({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const query = await searchParams;
+  const next = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (typeof value === "string") next.set(key, value);
+  }
+  const suffix = next.toString();
+  redirect(suffix ? `/panel/login?${suffix}` : "/panel/login");
 }

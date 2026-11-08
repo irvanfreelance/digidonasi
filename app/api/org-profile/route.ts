@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { unauthorized, zodError } from "@/lib/api/http";
-import { getPanelSession } from "@/lib/auth/panel-session";
+import { zodError } from "@/lib/api/http";
+import { blocked, decide } from "@/lib/auth/http";
 import { dbQuery } from "@/lib/db";
 import { fallbackOrg, type OrgProfile } from "@/types/org";
 
@@ -29,9 +29,9 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
-  const session = await getPanelSession();
-  if (!session) return unauthorized();
+  const denied = blocked(decide(req));
+  if (denied) return denied;
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return zodError("Data lembaga tidak valid");
-  return unauthorized();
+  return NextResponse.json({ error: "Penyimpanan lembaga menyusul." }, { status: 501 });
 }
