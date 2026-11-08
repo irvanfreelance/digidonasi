@@ -14,7 +14,7 @@ Tanggal: 8 November 2026 WIB. Paket 1 saja. Hari 2–7 tidak dimulai.
 
 - Cabang: `cursor/day1-foundation-1669`
 - Commit fondasi: `8349893f8fffe98062f1ed6dbacbcbbc5d8060af`
-- PR: diisi setelah benar-benar dibuat
+- PR: https://github.com/irvanfreelance/digidonasi/pull/1
 - Basis uji: PostgreSQL 17.11 lokal, port 5433, hanya `127.0.0.1`. Bukan Neon dan bukan produksi.
 
 ## Perintah
