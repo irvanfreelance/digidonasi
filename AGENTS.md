@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Berlaku untuk repo ini. Paket terpasang sampai hari 3 bila PR ini digabung. Hari 4 belum dimulai.
+Berlaku untuk repo ini. Paket terpasang sampai hari 4 bila PR ini digabung. Hari 5 belum dimulai.
 
 ## Yang sudah ditutup
 

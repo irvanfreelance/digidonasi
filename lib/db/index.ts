@@ -5,6 +5,7 @@ import { assertSafeDatabaseUrl } from "@/lib/db/run-sql";
 type Row = Record<string, unknown>;
 
 let pool: pg.Pool | null = null;
+let poolUrl = "";
 
 function databaseUrl() {
   const url = process.env.DATABASE_URL;
@@ -14,7 +15,11 @@ function databaseUrl() {
 }
 
 function localPool(url: string) {
-  if (!pool) pool = new pg.Pool({ connectionString: url, max: 4 });
+  if (!pool || poolUrl !== url) {
+    void pool?.end();
+    pool = new pg.Pool({ connectionString: url, max: 4 });
+    poolUrl = url;
+  }
   return pool;
 }
 
