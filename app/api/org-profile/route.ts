@@ -3,6 +3,7 @@ import { z } from "zod";
 import { zodError } from "@/lib/api/http";
 import { blocked, decide } from "@/lib/auth/http";
 import { dbQuery } from "@/lib/db";
+import { saveOrg } from "@/lib/donasi/manage";
 import { fallbackOrg, type OrgProfile } from "@/types/org";
 
 const hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
@@ -33,5 +34,6 @@ export async function PUT(req: Request) {
   if (denied) return denied;
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return zodError("Data lembaga tidak valid");
-  return NextResponse.json({ error: "Penyimpanan lembaga menyusul." }, { status: 501 });
+  const saved = await saveOrg(dbQuery, { ...parsed.data, logoUrl: parsed.data.logoUrl || null, faviconUrl: parsed.data.faviconUrl || null });
+  return NextResponse.json(saved);
 }
