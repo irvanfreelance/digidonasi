@@ -28,3 +28,6 @@ Sandbox Xendit dan Midtrans belum tervalidasi. `PAYMENT_MODE` bukan `live`, dan 
 ## Berikutnya
 
 Hari 5 hanya setelah paket ini digabung dengan persetujuan. Tidak ada auto-merge. Untuk uji sandbox, isi `XENDIT_SECRET_KEY`, `XENDIT_CALLBACK_TOKEN`, `MIDTRANS_SERVER_KEY`, dan `PAYMENT_MODE=live` di lingkungan klien, bukan di repo.
+
+- Commit: `3e393451da75c7ce6a38db718738791cb65feb0b`
+- PR: https://github.com/irvanfreelance/digidonasi/pull/5
