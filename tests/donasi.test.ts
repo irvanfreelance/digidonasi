@@ -47,11 +47,11 @@ const pay = (input: Parameters<typeof createCheckout>[1]) => inTx("digidonasi_da
 
 test("katalog, checkout, bundel, qurban, isolasi, dan halaman", async () => {
   const { db, sql } = await database();
-  await setCampaignStatus(sql, "demo-umum", "ACTIVE");
-  await setCampaignStatus(sql, "demo-nominal-tetap", "ACTIVE");
-  await setCampaignStatus(sql, "demo-qurban", "ACTIVE");
-  await setCampaignStatus(sql, "demo-bundel", "ACTIVE");
-  await setCampaignStatus(sql, "demo-mendesak", "ACTIVE");
+  const seeded = await listCampaigns(sql, { pageSize: 50 });
+  assert.equal(seeded.total, 8);
+  await setCampaignStatus(sql, "demo-zakat", "DRAFT");
+  await setCampaignStatus(sql, "demo-tanpa-target", "DRAFT");
+  await setCampaignStatus(sql, "demo-tanpa-batas", "DRAFT");
   const hidden = await listCampaigns(sql, { q: "zakat" });
   assert.equal(hidden.total, 0);
   const page = await listCampaigns(sql, { page: 2, pageSize: 2 });
