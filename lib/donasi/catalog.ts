@@ -1,35 +1,76 @@
 import type { Sql } from "@/lib/db";
 
-export type PageQuery = { q?: string; page?: number; pageSize?: number };
+export type PageQuery = { q?: string; page?: number; pageSize?: number; category?: string };
 
 function pageOf(query: PageQuery) {
   const page = query.page && query.page > 0 ? Math.floor(query.page) : 1;
   const pageSize = query.pageSize && query.pageSize > 0 ? Math.min(50, Math.floor(query.pageSize)) : 6;
-  return { page, pageSize, offset: (page - 1) * pageSize, q: (query.q ?? "").replace(/[%_]/g, "").trim() };
+  return {
+    page,
+    pageSize,
+    offset: (page - 1) * pageSize,
+    q: (query.q ?? "").replace(/[%_]/g, "").trim(),
+    category: (query.category ?? "").trim(),
+  };
 }
 
+const campaignSelect = `c.id, c.slug, c.title, c.summary, c.image_url, c.image_alt, c.minimum_amount,
+  c.target_amount, c.end_date, c.has_no_target, c.has_no_time_limit, c.is_urgent, c.is_carousel,
+  cat.name AS category, cat.slug AS category_slug, COALESCE(s.collected_amount, 0) AS collected_amount`;
+
+const activeFilter = `c.publication_status = 'ACTIVE'
+  AND ($1 = '%%' OR c.title ILIKE $1 OR cat.name ILIKE $1)
+  AND ($2 = '' OR cat.slug = $2)`;
+
 export async function listCampaigns(sql: Sql, query: PageQuery = {}) {
-  const { page, pageSize, offset, q } = pageOf(query);
+  const { page, pageSize, offset, q, category } = pageOf(query);
   const like = `%${q}%`;
   const totalRows = await sql<{ n: number }>(
     `SELECT count(*)::int AS n FROM campaigns c JOIN categories cat ON cat.id = c.category_id
-     WHERE c.publication_status = 'ACTIVE' AND ($1 = '%%' OR c.title ILIKE $1 OR cat.name ILIKE $1)`,
-    [like],
+     WHERE ${activeFilter}`,
+    [like, category],
   );
   const rows = await sql(
-    `SELECT c.id, c.slug, c.title, c.summary, c.minimum_amount, c.is_urgent, c.is_zakat, c.is_qurban, c.is_bundle, cat.name AS category
-     FROM campaigns c JOIN categories cat ON cat.id = c.category_id
-     WHERE c.publication_status = 'ACTIVE' AND ($1 = '%%' OR c.title ILIKE $1 OR cat.name ILIKE $1)
-     ORDER BY c.sort_order, c.id LIMIT $2 OFFSET $3`,
-    [like, pageSize, offset],
+    `SELECT ${campaignSelect}
+     FROM campaigns c
+     JOIN categories cat ON cat.id = c.category_id
+     LEFT JOIN campaign_stats s ON s.campaign_id = c.id
+     WHERE ${activeFilter}
+     ORDER BY c.sort_order, c.id LIMIT $3 OFFSET $4`,
+    [like, category, pageSize, offset],
   );
   return { rows, page, pageSize, total: Number(totalRows[0]?.n ?? 0) };
 }
 
+export async function listCatalogRails(sql: Sql) {
+  const categories = await sql(
+    `SELECT name, slug FROM categories WHERE is_active = true ORDER BY sort_order, id`,
+  );
+  const urgent = await sql(
+    `SELECT ${campaignSelect}
+     FROM campaigns c
+     JOIN categories cat ON cat.id = c.category_id
+     LEFT JOIN campaign_stats s ON s.campaign_id = c.id
+     WHERE c.publication_status = 'ACTIVE' AND c.is_urgent = true
+     ORDER BY c.sort_order, c.id LIMIT 8`,
+  );
+  const carousel = await sql(
+    `SELECT ${campaignSelect}
+     FROM campaigns c
+     JOIN categories cat ON cat.id = c.category_id
+     LEFT JOIN campaign_stats s ON s.campaign_id = c.id
+     WHERE c.publication_status = 'ACTIVE' AND c.is_carousel = true
+     ORDER BY c.sort_order, c.id LIMIT 8`,
+  );
+  return { categories, urgent, carousel };
+}
+
 export async function getPublicCampaign(sql: Sql, slug: string) {
   const rows = await sql(
-    `SELECT c.*, cat.name AS category_name FROM campaigns c
+    `SELECT c.*, cat.name AS category_name, COALESCE(s.collected_amount, 0) AS collected_amount
+     FROM campaigns c
      JOIN categories cat ON cat.id = c.category_id
+     LEFT JOIN campaign_stats s ON s.campaign_id = c.id
      WHERE c.slug = $1 AND c.publication_status = 'ACTIVE' LIMIT 1`,
     [slug],
   );

@@ -57,7 +57,7 @@ INSERT INTO campaigns (
   target_amount, suggestion_amounts, end_date, base_commission_pct, sort_order
 )
 SELECT v.seed_key, c.id, v.slug, v.title, v.summary, v.description, v.image_url, v.image_alt,
-       'DRAFT', v.is_verified, v.is_urgent, v.is_zakat, v.is_qurban, v.is_fixed_amount,
+       'ACTIVE', v.is_verified, v.is_urgent, v.is_zakat, v.is_qurban, v.is_fixed_amount,
        v.is_bundle, v.has_no_target, v.has_no_time_limit, v.is_carousel, v.minimum_amount,
        v.target_amount, v.suggestion_amounts, v.end_date, v.base_commission_pct, v.sort_order
 FROM (VALUES
@@ -97,7 +97,8 @@ ON CONFLICT (seed_key) DO UPDATE SET
   is_bundle = EXCLUDED.is_bundle,
   has_no_target = EXCLUDED.has_no_target,
   has_no_time_limit = EXCLUDED.has_no_time_limit,
-  is_carousel = EXCLUDED.is_carousel
+  is_carousel = EXCLUDED.is_carousel,
+  publication_status = EXCLUDED.publication_status
 WHERE campaigns.seed_untouched;
 
 INSERT INTO campaign_variants (seed_key, campaign_id, name, price_rupiah, names_per_qty)
@@ -124,14 +125,16 @@ JOIN campaigns i ON i.seed_key = v.item_key
 ON CONFLICT (seed_key) DO UPDATE SET qty = EXCLUDED.qty
 WHERE campaign_bundles.seed_untouched;
 
-INSERT INTO campaign_updates (seed_key, campaign_id, title, body)
+INSERT INTO campaign_updates (seed_key, campaign_id, title, body, publication_status)
 SELECT 'demo-update-mendesak', c.id,
        '[DEMO] Kabar contoh',
-       '[DEMO] Ini konten suntingan, bukan operasional penyaluran dan bukan data penerima.'
+       '[DEMO] Ini konten suntingan, bukan operasional penyaluran dan bukan data penerima.',
+       'ACTIVE'
 FROM campaigns c WHERE c.seed_key = 'demo-mendesak'
 ON CONFLICT (seed_key) DO UPDATE SET
   title = EXCLUDED.title,
-  body = EXCLUDED.body
+  body = EXCLUDED.body,
+  publication_status = EXCLUDED.publication_status
 WHERE campaign_updates.seed_untouched;
 
 INSERT INTO campaign_stats (campaign_id, collected_amount, donor_count)
@@ -216,53 +219,55 @@ INSERT INTO pixel_events (seed_key, screen_name, meta_event, tiktok_event, googl
 ON CONFLICT (seed_key) DO UPDATE SET is_active = EXCLUDED.is_active
 WHERE pixel_events.seed_untouched;
 
-INSERT INTO donation_blocks (seed_key, heading, body, links) VALUES
-  ('donasi.header', '[DEMO] Lembaga Contoh', NULL, '[]'),
-  ('donasi.search_placeholder', NULL, '[DEMO] Cari kampanye atau kategori', '[]'),
-  ('donasi.carousel', '[DEMO] Geser kampanye', NULL, '[]'),
-  ('donasi.kategori_heading', '[DEMO] Kategori pilihan', NULL, '[]'),
-  ('donasi.kategori_items', '[DEMO] Isi kategori', 'Baris categories.', '[]'),
-  ('donasi.mendesak_heading', '[DEMO] Bantuan mendesak', NULL, '[{"label":"[DEMO] Lainnya","href":"/donasi/mendesak"}]'),
-  ('donasi.mendesak_items', '[DEMO] Kartu mendesak', 'Kampanye is_urgent.', '[]'),
-  ('donasi.rekomendasi_heading', '[DEMO] Rekomendasi kebaikan', NULL, '[]'),
-  ('donasi.list', '[DEMO] Daftar kampanye', NULL, '[]'),
-  ('donasi.search_result_heading', '[DEMO] Hasil pencarian', '[DEMO] {n} program ditemukan', '[]'),
-  ('donasi.search_empty', NULL, '[DEMO] Tidak ada kampanye yang sesuai.', '[]'),
-  ('donasi.footer', '[DEMO] Kaki halaman', '[DEMO] Medsos dan hak cipta contoh.', '[]'),
-  ('donasi.mendesak_page_title', '[DEMO] Bantuan mendesak', NULL, '[]'),
-  ('donasi.mendesak_empty', NULL, '[DEMO] Belum ada program mendesak.', '[]'),
-  ('donasi.list_sort_labels', '[DEMO] Urutan', NULL, '[{"label":"[DEMO] Terbaru"},{"label":"[DEMO] Paling mendesak"}]')
-ON CONFLICT (seed_key) DO UPDATE SET
-  heading = EXCLUDED.heading,
-  body = EXCLUDED.body,
-  links = EXCLUDED.links
-WHERE donation_blocks.seed_untouched;
-
-INSERT INTO website_blocks (seed_key, heading, body, links, items) VALUES
-  ('web.video', '[DEMO] Saksikan contoh', '[DEMO] Naskah video. Tidak ada berkas video.', '[{"label":"[DEMO] Lihat program","href":"/program"}]', '[]'),
-  ('web.hero_badge', '[DEMO] Lencana contoh', '[DEMO] Bukan nomor izin.', '[]', '[]'),
-  ('web.hero_copy', '[DEMO] Judul beranda', '[DEMO] Paragraf contoh.', '[{"label":"[DEMO] Donasi sekarang","href":"/donasi"},{"label":"[DEMO] Lihat program","href":"/program"}]', '[]'),
-  ('web.hero_map', '[DEMO] Peta contoh', '[DEMO] Bukan sebaran operasional.', '[]', '[]'),
-  ('web.care_copy', '[DEMO] Dampak contoh', '[DEMO] Paragraf kategori peduli.', '[]', '[]'),
-  ('web.care_items', '[DEMO] Kategori peduli', NULL, '[]', '[]'),
-  ('web.featured_copy', '[DEMO] Program unggulan', '[DEMO] Program kami', '[{"label":"[DEMO] Lihat semua","href":"/program"}]', '[]'),
-  ('web.featured_items', '[DEMO] Kartu unggulan', NULL, '[]', '[]'),
-  ('web.values', '[DEMO] Nilai inti', NULL, '[]',
-    '[{"title":"[DEMO] Legalitas contoh","body":"[DEMO] Bukan izin."},{"title":"[DEMO] Transparan contoh","body":"[DEMO] Bukan hasil audit."},{"title":"[DEMO] Sasaran contoh","body":"[DEMO] Bukan data penerima."},{"title":"[DEMO] Dampak contoh","body":"[DEMO] Bukan angka operasional."}]'),
-  ('web.jejak_copy', '[DEMO] Bukti dampak', '[DEMO] Paragraf jejak.', '[]', '[]'),
-  ('web.jejak_items', '[DEMO] Jejak', NULL, '[]', '[]'),
-  ('web.testimoni_copy', '[DEMO] Kisah contoh', NULL, '[]', '[]'),
-  ('web.testimoni_items', '[DEMO] Kutipan', NULL, '[]', '[]'),
-  ('web.mitra_copy', '[DEMO] Kemitraan contoh', NULL, '[]', '[]'),
-  ('web.mitra_items', '[DEMO] Mitra', NULL, '[]', '[]'),
-  ('web.kabar_copy', '[DEMO] Kabar contoh', '[DEMO] Berita dan laporan contoh.', '[{"label":"[DEMO] Semua berita","href":"/kabar-kebaikan"}]', '[]'),
-  ('web.kabar_items', '[DEMO] Kartu artikel', NULL, '[]', '[]'),
-  ('web.kontak_cta', '[DEMO] Ajakan kontak', '[DEMO] Bukan nomor petugas.', '[{"label":"[DEMO] Donasi sekarang","href":"/donasi"},{"label":"[DEMO] Hubungi kami","href":"/kontak"}]', '[]')
+INSERT INTO donation_blocks (seed_key, heading, body, links, publication_status) VALUES
+  ('donasi.header', '[DEMO] Lembaga Contoh', NULL, '[]', 'ACTIVE'),
+  ('donasi.search_placeholder', NULL, '[DEMO] Cari kampanye atau kategori', '[]', 'ACTIVE'),
+  ('donasi.carousel', '[DEMO] Geser kampanye', NULL, '[]', 'ACTIVE'),
+  ('donasi.kategori_heading', '[DEMO] Kategori pilihan', NULL, '[]', 'ACTIVE'),
+  ('donasi.kategori_items', '[DEMO] Isi kategori', 'Baris categories.', '[]', 'ACTIVE'),
+  ('donasi.mendesak_heading', '[DEMO] Bantuan mendesak', NULL, '[{"label":"[DEMO] Lainnya","href":"/donasi/mendesak"}]', 'ACTIVE'),
+  ('donasi.mendesak_items', '[DEMO] Kartu mendesak', 'Kampanye is_urgent.', '[]', 'ACTIVE'),
+  ('donasi.rekomendasi_heading', '[DEMO] Rekomendasi kebaikan', NULL, '[]', 'ACTIVE'),
+  ('donasi.list', '[DEMO] Daftar kampanye', NULL, '[]', 'ACTIVE'),
+  ('donasi.search_result_heading', '[DEMO] Hasil pencarian', '[DEMO] {n} program ditemukan', '[]', 'ACTIVE'),
+  ('donasi.search_empty', NULL, '[DEMO] Tidak ada kampanye yang sesuai.', '[]', 'ACTIVE'),
+  ('donasi.footer', '[DEMO] Kaki halaman', '[DEMO] Medsos dan hak cipta contoh.', '[]', 'ACTIVE'),
+  ('donasi.mendesak_page_title', '[DEMO] Bantuan mendesak', NULL, '[]', 'ACTIVE'),
+  ('donasi.mendesak_empty', NULL, '[DEMO] Belum ada program mendesak.', '[]', 'ACTIVE'),
+  ('donasi.list_sort_labels', '[DEMO] Urutan', NULL, '[{"label":"[DEMO] Terbaru"},{"label":"[DEMO] Paling mendesak"}]', 'ACTIVE')
 ON CONFLICT (seed_key) DO UPDATE SET
   heading = EXCLUDED.heading,
   body = EXCLUDED.body,
   links = EXCLUDED.links,
-  items = EXCLUDED.items
+  publication_status = EXCLUDED.publication_status
+WHERE donation_blocks.seed_untouched;
+
+INSERT INTO website_blocks (seed_key, heading, body, links, items, publication_status) VALUES
+  ('web.video', '[DEMO] Saksikan contoh', '[DEMO] Naskah video. Tidak ada berkas video.', '[{"label":"[DEMO] Lihat program","href":"/program"}]', '[]', 'ACTIVE'),
+  ('web.hero_badge', '[DEMO] Lencana contoh', '[DEMO] Bukan nomor izin.', '[]', '[]', 'ACTIVE'),
+  ('web.hero_copy', '[DEMO] Judul beranda', '[DEMO] Paragraf contoh.', '[{"label":"[DEMO] Donasi sekarang","href":"/donasi"},{"label":"[DEMO] Lihat program","href":"/program"}]', '[]', 'ACTIVE'),
+  ('web.hero_map', '[DEMO] Peta contoh', '[DEMO] Bukan sebaran operasional.', '[]', '[]', 'ACTIVE'),
+  ('web.care_copy', '[DEMO] Dampak contoh', '[DEMO] Paragraf kategori peduli.', '[]', '[]', 'ACTIVE'),
+  ('web.care_items', '[DEMO] Kategori peduli', NULL, '[]', '[]', 'ACTIVE'),
+  ('web.featured_copy', '[DEMO] Program unggulan', '[DEMO] Program kami', '[{"label":"[DEMO] Lihat semua","href":"/program"}]', '[]', 'ACTIVE'),
+  ('web.featured_items', '[DEMO] Kartu unggulan', NULL, '[]', '[]', 'ACTIVE'),
+  ('web.values', '[DEMO] Nilai inti', NULL, '[]',
+    '[{"title":"[DEMO] Legalitas contoh","body":"[DEMO] Bukan izin."},{"title":"[DEMO] Transparan contoh","body":"[DEMO] Bukan hasil audit."},{"title":"[DEMO] Sasaran contoh","body":"[DEMO] Bukan data penerima."},{"title":"[DEMO] Dampak contoh","body":"[DEMO] Bukan angka operasional."}]', 'ACTIVE'),
+  ('web.jejak_copy', '[DEMO] Bukti dampak', '[DEMO] Paragraf jejak.', '[]', '[]', 'ACTIVE'),
+  ('web.jejak_items', '[DEMO] Jejak', NULL, '[]', '[]', 'ACTIVE'),
+  ('web.testimoni_copy', '[DEMO] Kisah contoh', NULL, '[]', '[]', 'ACTIVE'),
+  ('web.testimoni_items', '[DEMO] Kutipan', NULL, '[]', '[]', 'ACTIVE'),
+  ('web.mitra_copy', '[DEMO] Kemitraan contoh', NULL, '[]', '[]', 'ACTIVE'),
+  ('web.mitra_items', '[DEMO] Mitra', NULL, '[]', '[]', 'ACTIVE'),
+  ('web.kabar_copy', '[DEMO] Kabar contoh', '[DEMO] Berita dan laporan contoh.', '[{"label":"[DEMO] Semua berita","href":"/kabar-kebaikan"}]', '[]', 'ACTIVE'),
+  ('web.kabar_items', '[DEMO] Kartu artikel', NULL, '[]', '[]', 'ACTIVE'),
+  ('web.kontak_cta', '[DEMO] Ajakan kontak', '[DEMO] Bukan nomor petugas.', '[{"label":"[DEMO] Donasi sekarang","href":"/donasi"},{"label":"[DEMO] Hubungi kami","href":"/kontak"}]', '[]', 'ACTIVE')
+ON CONFLICT (seed_key) DO UPDATE SET
+  heading = EXCLUDED.heading,
+  body = EXCLUDED.body,
+  links = EXCLUDED.links,
+  items = EXCLUDED.items,
+  publication_status = EXCLUDED.publication_status
 WHERE website_blocks.seed_untouched;
 
 INSERT INTO web_article_categories (seed_key, name, slug) VALUES

@@ -4,6 +4,7 @@ import test from "node:test";
 import pg from "pg";
 import { applySqlFile } from "../lib/db/run-sql";
 import { listCampaigns } from "../lib/donasi/catalog";
+import { progressPercent } from "../components/public/campaign-card";
 import { DonasiError, createCheckout, isUniqueViolation } from "../lib/donasi/checkout";
 import { saveDonationBlock, saveOrg, setCampaignStatus } from "../lib/donasi/manage";
 import type { Sql } from "../lib/db";
@@ -47,11 +48,16 @@ const pay = (input: Parameters<typeof createCheckout>[1]) => inTx("digidonasi_da
 
 test("katalog, checkout, bundel, qurban, isolasi, dan halaman", async () => {
   const { db, sql } = await database();
-  await setCampaignStatus(sql, "demo-umum", "ACTIVE");
-  await setCampaignStatus(sql, "demo-nominal-tetap", "ACTIVE");
-  await setCampaignStatus(sql, "demo-qurban", "ACTIVE");
-  await setCampaignStatus(sql, "demo-bundel", "ACTIVE");
-  await setCampaignStatus(sql, "demo-mendesak", "ACTIVE");
+  const seeded = await listCampaigns(sql, { pageSize: 50 });
+  assert.equal(seeded.total, 8);
+  assert.equal(Number(seeded.rows[0].collected_amount), 0);
+  const filtered = await listCampaigns(sql, { category: "demo-kemanusiaan", pageSize: 50 });
+  assert.equal(filtered.rows.every((row) => row.category_slug === "demo-kemanusiaan"), true);
+  assert.equal(progressPercent(70, 100, false), 70);
+  assert.equal(progressPercent(10, null, true), null);
+  await setCampaignStatus(sql, "demo-zakat", "DRAFT");
+  await setCampaignStatus(sql, "demo-tanpa-target", "DRAFT");
+  await setCampaignStatus(sql, "demo-tanpa-batas", "DRAFT");
   const hidden = await listCampaigns(sql, { q: "zakat" });
   assert.equal(hidden.total, 0);
   const page = await listCampaigns(sql, { page: 2, pageSize: 2 });
