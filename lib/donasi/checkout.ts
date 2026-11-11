@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Sql } from "@/lib/db";
+import { createCharge, faspayRejected } from "@/lib/pembayaran/verify";
 
 export class DonasiError extends Error {
   code: string;
@@ -26,6 +27,7 @@ export type CheckoutInput = {
   sessionEmail?: string | null;
   sessionName?: string | null;
   invoiceCode?: string;
+  methodCode?: string;
 };
 
 export type CheckoutResult = {
@@ -34,7 +36,7 @@ export type CheckoutResult = {
   adminFee: number;
   totalAmount: number;
   instruction: string;
-  provider: "mock";
+  provider: "mock" | "xendit" | "midtrans";
 };
 
 function int(value: unknown, label: string) {
@@ -131,20 +133,39 @@ export async function createCheckout(sql: Sql, input: CheckoutInput): Promise<Ch
     base = amount;
   }
 
-  const method = await sql<{ id: string }>(`SELECT id FROM payment_methods WHERE seed_key = 'demo-pay-manual' LIMIT 1`);
-  if (!method[0]) throw new DonasiError("metode_mock_tidak_ada");
+  const method = input.methodCode
+    ? await sql<{ id: string; provider_code: string | null; is_active: boolean; code: string }>(
+        `SELECT id, provider_code, is_active, code FROM payment_methods WHERE code = $1 LIMIT 1`,
+        [input.methodCode],
+      )
+    : await sql<{ id: string; provider_code: string | null; is_active: boolean; code: string }>(
+        `SELECT id, provider_code, is_active, code FROM payment_methods WHERE seed_key = 'demo-pay-manual' LIMIT 1`,
+      );
+  const chosen = method[0];
+  if (!chosen) throw new DonasiError("metode_mock_tidak_ada");
+  if (faspayRejected(chosen.code) || faspayRejected(String(chosen.provider_code || ""))) throw new DonasiError("faspay_tidak_tersedia");
+  let provider: "mock" | "xendit" | "midtrans" = "mock";
+  let providerRef = "mock";
+  let instruction = "Menunggu pembayaran mock. Xendit dan Midtrans belum dihubungkan.";
   const code = input.invoiceCode || newInvoiceCode();
+  if (input.methodCode) {
+    if (!chosen.is_active || (chosen.provider_code !== "xendit" && chosen.provider_code !== "midtrans")) throw new DonasiError("metode_tidak_aktif");
+    provider = chosen.provider_code;
+    const charge = await createCharge({ provider, invoiceCode: code, amount: base });
+    providerRef = charge.providerRef;
+    instruction = charge.instruction;
+  }
   const fee = 0;
   const inserted = await sql<{ id: string }>(
     `INSERT INTO invoices (
       invoice_code, donor_id, payment_method_id, donor_name_snapshot, donor_email, donor_phone,
-      is_anonymous, doa, base_amount, admin_fee, total_amount, status, provider_ref
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'PENDING','mock')
+      is_anonymous, doa, base_amount, admin_fee, total_amount, status, provider_code, provider_ref
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'PENDING',$12,$13)
     RETURNING id`,
     [
       code,
       input.donorId ?? null,
-      method[0].id,
+      chosen.id,
       name,
       email,
       input.donorPhone?.trim() || null,
@@ -153,6 +174,8 @@ export async function createCheckout(sql: Sql, input: CheckoutInput): Promise<Ch
       base,
       fee,
       base + fee,
+      provider === "mock" ? null : provider,
+      providerRef,
     ],
   );
   for (const line of prepared) {
@@ -170,7 +193,7 @@ export async function createCheckout(sql: Sql, input: CheckoutInput): Promise<Ch
     baseAmount: base,
     adminFee: fee,
     totalAmount: base + fee,
-    provider: "mock",
-    instruction: "Menunggu pembayaran mock. Xendit dan Midtrans belum dihubungkan.",
+    provider,
+    instruction,
   };
 }
