@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Source_Sans_3 } from "next/font/google";
 import { Toaster } from "sonner";
 import { ConfirmHost } from "@/components/ui/confirm-toast";
-import { fallbackOrg } from "@/types/org";
+import { loadPublicOrg } from "@/lib/org-public";
 import "./globals.css";
 
 const sourceSans = Source_Sans_3({
@@ -13,11 +13,12 @@ const sourceSans = Source_Sans_3({
 
 export const dynamic = "force-dynamic";
 
-export function generateMetadata(): Metadata {
-  const org = fallbackOrg();
+export async function generateMetadata(): Promise<Metadata> {
+  const org = await loadPublicOrg();
   return {
     title: org.nama,
     description: org.tagline,
+    icons: { icon: org.favicon_url || "/brand/favicon.svg" },
   };
 }
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CheckoutForm } from "@/components/public/checkout-form";
-import { CampaignArt, daysRemaining, progressPercent, rupiah } from "@/components/public/campaign-card";
+import { CampaignArt, RichCopy, daysRemaining, progressPercent, rupiah } from "@/components/public/campaign-card";
 import { DonationShell } from "@/components/public/donation-shell";
 import { dbQuery } from "@/lib/db";
 import { getPublicCampaign } from "@/lib/donasi/catalog";
@@ -35,6 +35,9 @@ export default async function CampaignPage({ params }: { params: Promise<{ slug:
         <p className="mt-2 text-sm leading-relaxed text-gray-600">{String(campaign.description)}</p>
         <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
           <div className="text-sm font-bold text-gray-800">{rupiah(collected)}</div>
+          {Number(campaign.donor_count) > 0 ? (
+            <div className="text-[11px] text-gray-500">{Number(campaign.donor_count).toLocaleString("id-ID")} donatur</div>
+          ) : null}
           {percent == null ? (
             <div className="mt-1 text-[11px] font-semibold text-teal-700">Tanpa target</div>
           ) : (
@@ -53,7 +56,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ slug:
           {detail.updates.map((item) => (
             <li key={String(item.title)} className="rounded-2xl bg-white p-3 text-[13px] shadow-sm">
               <strong>{String(item.title)}</strong>
-              <p className="mb-0">{String(item.body)}</p>
+              <RichCopy text={String(item.body)} />
             </li>
           ))}
         </ul>

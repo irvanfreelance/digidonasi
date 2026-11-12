@@ -50,7 +50,9 @@ test("katalog, checkout, bundel, qurban, isolasi, dan halaman", async () => {
   const { db, sql } = await database();
   const seeded = await listCampaigns(sql, { pageSize: 50 });
   assert.equal(seeded.total, 8);
-  assert.equal(Number(seeded.rows[0].collected_amount), 0);
+  const umum = seeded.rows.find((row) => row.slug === "demo-umum");
+  assert.equal(Number(umum?.collected_amount), 86400000);
+  assert.equal(String(umum?.image_url), "/seed/kampanye/pangan.webp");
   const filtered = await listCampaigns(sql, { category: "demo-kemanusiaan", pageSize: 50 });
   assert.equal(filtered.rows.every((row) => row.category_slug === "demo-kemanusiaan"), true);
   assert.equal(progressPercent(70, 100, false), 70);
