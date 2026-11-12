@@ -1,6 +1,16 @@
 # Progres
 
-Tanggal: 12 November 2026 WIB. Bukan paket 5. Data contoh diganti merek fiktif Yayasan Lentera Barokah beserta foto lokal. Kanal pembayaran tetap mati. Hari 5–7 tidak dimulai.
+Tanggal: 13 November 2026 WIB. Paket 5, afiliasi. Tidak ada migrasi baru. Hari 6–7 tidak dimulai.
+
+## Paket 5
+
+Klik terakhir 30 hari, komisi dari pokok, tahan 14 hari, dan pelepasan idempoten saat dasbor atau tarik dibuka. Tidak ada penjadwal. Pembalikan lunas membalik buku. Pencairan hanya bukti transfer manual. Afiliasi tidak melihat buku afiliasi lain dan tidak mendapat komisi dari donasinya sendiri.
+
+`npm test`: 18 lulus. `npm run lint`, `npm run typecheck`, dan `npm run build` lulus. Tidak ada berkas migrasi baru.
+
+## Sebelumnya
+
+Tanggal: 12 November 2026 WIB. Data contoh Lentera Barokah.
 
 ## Sebelumnya
 

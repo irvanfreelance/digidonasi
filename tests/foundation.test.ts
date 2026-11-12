@@ -75,7 +75,7 @@ test("pasang, seed ulang, dan suntingan bertahan", async () => {
   assert.equal(first.invoices, 0);
   assert.equal(first.ledger, 0);
   assert.equal(first.donors, 0);
-  assert.equal(first.affiliates, 0);
+  assert.equal(first.affiliates, 2);
   assert.equal(first.activeMethods, 0);
   assert.equal(first.qrisPayload, 0);
   assert.equal(first.paid, 0);

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Sql } from "@/lib/db";
+import { resolveClick } from "@/lib/afiliasi/ledger";
 import { createCharge, faspayRejected } from "@/lib/pembayaran/verify";
 
 export class DonasiError extends Error {
@@ -28,6 +29,8 @@ export type CheckoutInput = {
   sessionName?: string | null;
   invoiceCode?: string;
   methodCode?: string;
+  clickToken?: string | null;
+  now?: Date;
 };
 
 export type CheckoutResult = {
@@ -133,6 +136,17 @@ export async function createCheckout(sql: Sql, input: CheckoutInput): Promise<Ch
     base = amount;
   }
 
+  let affiliateId: string | null = null;
+  let clickCampaign: string | null = null;
+  if (input.clickToken) {
+    const click = await resolveClick(sql, input.clickToken, input.now ?? new Date());
+    const self = Boolean(email && click && email.toLowerCase() === click.email.toLowerCase());
+    if (click && !self) {
+      affiliateId = click.affiliate_id;
+      clickCampaign = click.campaign_id;
+    }
+  }
+
   const method = input.methodCode
     ? await sql<{ id: string; provider_code: string | null; is_active: boolean; code: string }>(
         `SELECT id, provider_code, is_active, code FROM payment_methods WHERE code = $1 LIMIT 1`,
@@ -179,10 +193,11 @@ export async function createCheckout(sql: Sql, input: CheckoutInput): Promise<Ch
     ],
   );
   for (const line of prepared) {
+    const attributed = affiliateId && (line.campaignId === clickCampaign || line.bundleId === clickCampaign) ? affiliateId : null;
     const trx = await sql<{ id: string }>(
-      `INSERT INTO transactions (invoice_id, campaign_id, variant_id, bundle_campaign_id, qty, amount)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [inserted[0].id, line.campaignId, line.variantId, line.bundleId, line.qty, line.amount],
+      `INSERT INTO transactions (invoice_id, campaign_id, variant_id, bundle_campaign_id, affiliate_id, qty, amount)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [inserted[0].id, line.campaignId, line.variantId, line.bundleId, attributed, line.qty, line.amount],
     );
     for (const mudhohi of line.names) {
       await sql(`INSERT INTO transaction_qurban_names (transaction_id, mudhohi_name) VALUES ($1,$2)`, [trx[0].id, mudhohi]);

@@ -1,13 +1,14 @@
 # AGENTS.md
 
-Berlaku untuk repo ini. Paket terpasang sampai hari 4 bila PR ini digabung. Hari 5 belum dimulai.
+Berlaku untuk repo ini. Paket terpasang sampai hari 5 bila PR ini digabung. Hari 6 belum dimulai.
 
 ## Yang sudah ditutup
 
 - Satu klien, satu repo, satu basis, satu env. Tidak ada pengalih tenant.
 - `WEBSITE_ENABLED` hanya env server. Persis `true` menyalakan website. Nilai lain mematikan rute, API, dan menu website tanpa menghapus baris.
 - Peran panel hanya `SUPERADMIN` dan `WEBSITE_EDITOR`. Donatur dan afiliasi adalah tabel serta sesi terpisah. Email yang sama boleh punya baris admin dan donatur.
-- Xendit dan Midtrans menyusul hari 4. Faspay hanya baris placeholder tidak aktif.
+- Xendit dan Midtrans memverifikasi webhook. Faspay hanya baris placeholder tidak aktif.
+- Komisi afiliasi memakai klik terakhir 30 hari, tahan 14 hari, dan persen dari pokok. Pencairan hanya transfer manual. Tidak ada penjadwal.
 - Tidak ada CRM, payroll, FINS, atau modul penyaluran. Kabar dan alokasi adalah konten.
 - Tidak ada deploy, preview Vercel, atau provisioning dari repo ini.
 
