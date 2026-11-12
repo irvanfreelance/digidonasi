@@ -14,4 +14,4 @@ Isi seed adalah cerita fiktif Yayasan Lentera Barokah, bukan lembaga sungguhan. 
 
 Kategori kampanye, delapan kampanye yang menutup tiap bendera teramati, dua varian qurban, dua anak bundel, kabar penyaluran, statistik contoh, QRIS nonaktif tanpa string, empat penyedia (Xendit dan Midtrans siap-tapi-mati, Faspay SNAP dan non-SNAP placeholder mati), enam kanal mati beserta instruksi, templat notifikasi mati, artikel, kategori, tag, relasi, tentang, linimasa, misi, tim, legalitas, FAQ, mitra, jejak, pin, laporan, alokasi, dan rekening `000` yang tidak bisa dibayar. Foto lokal dicatat di `docs/SEED_IMAGES.md`.
 
-Tidak ada invoice, buku afiliasi, donatur, afiliasi, atau sesi.
+Tidak ada invoice, buku komisi, donatur, atau sesi. Dua afiliasi contoh tidak membawa saldo.

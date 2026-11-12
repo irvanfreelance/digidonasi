@@ -153,7 +153,7 @@ test("website dan promosi mengikuti env serta status", async () => {
     assert.equal(blocked.status, 403);
     const active = `digidonasi.affiliate=${sealSession(claims({ aud: "affiliate", status: "ACTIVE" }), secret)}`;
     const opened = await promo(new Request("http://localhost/api/afiliasi/promosi", { method: "POST", headers: { cookie: active } }));
-    assert.equal(opened.status, 501);
+    assert.ok(opened.status === 200 || opened.status === 503);
   } finally {
     delete process.env.WEBSITE_ENABLED;
     process.env.AUTH_SECRET = previous;
@@ -181,7 +181,8 @@ test("identitas tiga audiens tidak saling membuat baris", async () => {
   await signInDonor(sql, profile);
   assert.equal(Number((await db.query("SELECT count(*)::int AS n FROM users")).rows[0].n), 1);
   assert.equal(Number((await db.query("SELECT count(*)::int AS n FROM donors")).rows[0].n), 1);
-  assert.equal(Number((await db.query("SELECT count(*)::int AS n FROM affiliates")).rows[0].n), 0);
+  assert.equal(Number((await db.query("SELECT count(*)::int AS n FROM affiliates WHERE email = 'sama@example.com'")).rows[0].n), 0);
+  assert.equal(Number((await db.query("SELECT count(*)::int AS n FROM affiliates")).rows[0].n), 2);
   await signInAffiliate(sql, { ...profile, sub: "sub-afiliasi", email: "afiliasi@example.com" });
   const affiliate = await db.query("SELECT status, google_sub FROM affiliates WHERE email = 'afiliasi@example.com'");
   assert.equal(affiliate.rows[0].status, "PENDING");

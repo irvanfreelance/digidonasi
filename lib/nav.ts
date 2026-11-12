@@ -32,7 +32,7 @@ export const NAV: NavGroup[] = [
   },
   {
     group: "Afiliasi",
-    items: [{ href: "/affiliates", label: "Persetujuan", roles: SA }],
+    items: [{ href: "/affiliates", label: "Afiliasi", roles: SA }],
   },
   {
     group: "Website",

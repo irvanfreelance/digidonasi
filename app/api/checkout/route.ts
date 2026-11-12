@@ -7,12 +7,14 @@ import { DonasiError, createCheckout, isUniqueViolation, newInvoiceCode, type Ch
 
 export async function POST(request: Request) {
   const body = (await request.json()) as CheckoutInput;
-  const donor = openSession(cookieJar(request.headers.get("cookie"))[COOKIE.donor], "donor", authSecret());
+  const jar = cookieJar(request.headers.get("cookie"));
+  const donor = openSession(jar[COOKIE.donor], "donor", authSecret());
   const input: CheckoutInput = {
     ...body,
     donorId: donor?.id ?? null,
     sessionEmail: donor?.email ?? null,
     sessionName: donor?.name ?? null,
+    clickToken: body.clickToken || jar["digidonasi.ref"] || null,
   };
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {

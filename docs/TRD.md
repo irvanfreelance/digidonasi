@@ -6,6 +6,6 @@ Satu proses, satu `DATABASE_URL`. Tidak ada `tenant_id`.
 
 Pintu masuk: `/masuk`, `/panel/login`, dan `/afiliasi/masuk`. Webhook Xendit dan Midtrans memverifikasi tanda tangan, menolak nominal yang tidak sama, dan tidak mengulang statistik. Faspay tidak bisa dipilih. CMS lembaga belum diimplementasikan.
 
-Tiga audiens Google, verifikasi webhook, dan job komisi belum dipasang. Nama penyedia Faspay ada di katalog basis sebagai placeholder tidak aktif.
+Komisi afiliasi melekat pada webhook lunas dan pembalikan manual. Tidak ada penjadwal. Faspay tetap placeholder tidak aktif.
 
 Query memakai SQL berparameter. Migrasi satu berkas dijalankan dalam satu transaksi.

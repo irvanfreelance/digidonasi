@@ -571,7 +571,24 @@ ON CONFLICT (seed_key) DO UPDATE SET
   publication_status = EXCLUDED.publication_status
 WHERE web_bank_accounts.seed_untouched;
 
--- Tidak ada baris users, donors, affiliates, invoices, transactions,
--- payment_events, notification_outbox, affiliate_ledger, payout_requests, atau klik.
+INSERT INTO affiliates (seed_key, nama, email, status) VALUES
+  ('demo-afiliasi-raka', 'Raka Maulana', 'raka.relawan@lentera-barokah.example', 'ACTIVE'),
+  ('demo-afiliasi-lestari', 'Lestari Putri', 'lestari.relawan@lentera-barokah.example', 'PENDING')
+ON CONFLICT (seed_key) DO UPDATE SET
+  nama = EXCLUDED.nama,
+  email = EXCLUDED.email,
+  status = EXCLUDED.status
+WHERE affiliates.seed_untouched;
+
+INSERT INTO affiliate_campaign_commissions (affiliate_id, campaign_id, commission_pct)
+SELECT a.id, c.id, 8
+FROM affiliates a
+JOIN campaigns c ON c.seed_key = 'demo-mendesak'
+WHERE a.seed_key = 'demo-afiliasi-raka'
+ON CONFLICT (affiliate_id, campaign_id) DO UPDATE SET commission_pct = EXCLUDED.commission_pct;
+
+-- Tidak ada users, donors, invoices, transactions, payment_events,
+-- notification_outbox, affiliate_ledger, payout_requests, atau klik.
+-- Dua afiliasi contoh tidak membawa saldo.
 
 SELECT set_config('digidonasi.seeding', 'off', true);
