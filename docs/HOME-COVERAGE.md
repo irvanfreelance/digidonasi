@@ -1,6 +1,6 @@
 # Cakupan beranda pada seed
 
-Semua baris di bawah berstatus `DRAFT` kecuali disebut lain. Seed mengisi teks, bukan halaman yang sudah jadi.
+Isi seed adalah cerita fiktif Yayasan Lentera Barokah, bukan lembaga sungguhan. Blok beranda dan kampanye berstatus `ACTIVE`. Statistik program diisi angka contoh. Suntingan klien yang sudah mengubah `seed_untouched` tidak ditimpa. Statistik yang sudah bukan nol juga tidak ditimpa.
 
 ## Lima belas blok `/donasi`
 
@@ -12,6 +12,6 @@ Semua baris di bawah berstatus `DRAFT` kecuali disebut lain. Seed mengisi teks, 
 
 ## Di luar dua beranda, tetap ditanam
 
-Kategori kampanye, delapan kampanye yang menutup tiap bendera teramati, dua varian qurban, dua anak bundel, satu kabar konten, statistik nol yang tidak direset, QRIS nonaktif tanpa string, empat penyedia (Xendit dan Midtrans siap-tapi-mati, Faspay SNAP dan non-SNAP placeholder mati), enam kanal mati beserta instruksi, templat notifikasi mati, artikel, kategori, tag, relasi, tentang, linimasa, misi, tim, legalitas, FAQ, mitra, jejak, pin, laporan, alokasi, dan rekening demo `000` yang tidak bisa dibayar.
+Kategori kampanye, delapan kampanye yang menutup tiap bendera teramati, dua varian qurban, dua anak bundel, kabar penyaluran, statistik contoh, QRIS nonaktif tanpa string, empat penyedia (Xendit dan Midtrans siap-tapi-mati, Faspay SNAP dan non-SNAP placeholder mati), enam kanal mati beserta instruksi, templat notifikasi mati, artikel, kategori, tag, relasi, tentang, linimasa, misi, tim, legalitas, FAQ, mitra, jejak, pin, laporan, alokasi, dan rekening `000` yang tidak bisa dibayar. Foto lokal dicatat di `docs/SEED_IMAGES.md`.
 
 Tidak ada invoice, buku afiliasi, donatur, afiliasi, atau sesi.

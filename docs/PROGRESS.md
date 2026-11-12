@@ -1,6 +1,10 @@
 # Progres
 
-Tanggal: 11 November 2026 WIB. Paket 4. Hari 5–7 tidak dimulai.
+Tanggal: 12 November 2026 WIB. Bukan paket 5. Data contoh diganti merek fiktif Yayasan Lentera Barokah beserta foto lokal. Kanal pembayaran tetap mati. Hari 5–7 tidak dimulai.
+
+## Sebelumnya
+
+Tanggal: 11 November 2026 WIB. Paket 4.
 
 ## Sumber
 

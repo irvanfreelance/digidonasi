@@ -57,9 +57,9 @@ export default async function DonasiPage({ searchParams }: { searchParams: Promi
           {rails.categories.map((category) => (
             <Link key={String(category.slug)} href={`/donasi?kategori=${category.slug}`} className={`flex min-w-[72px] flex-col items-center text-[11px] font-semibold ${kategori === category.slug ? "text-teal-700" : "text-gray-600"}`}>
               <span className="mb-2 flex h-14 w-14 items-center justify-center rounded-2xl border border-gray-50 bg-teal-50 font-bold text-teal-700 shadow-sm">
-                {String(category.name).replace("[DEMO] ", "").slice(0, 1)}
+                {String(category.name).slice(0, 1)}
               </span>
-              {String(category.name).replace("[DEMO] ", "")}
+              {String(category.name)}
             </Link>
           ))}
         </div>

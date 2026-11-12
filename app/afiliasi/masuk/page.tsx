@@ -1,7 +1,7 @@
 import { LoginScreen } from "@/components/auth/login-screen";
 import { MockLoginForm } from "@/components/auth/mock-form";
 import { authMode } from "@/lib/auth/doors";
-import { fallbackOrg } from "@/types/org";
+import { loadPublicOrg } from "@/lib/org-public";
 
 export default async function AffiliateLoginPage({
   searchParams,
@@ -16,7 +16,7 @@ export default async function AffiliateLoginPage({
         <MockLoginForm action="/api/auth/affiliate/callback" state={query.state} />
       ) : null}
       <LoginScreen
-        org={fallbackOrg()}
+        org={await loadPublicOrg()}
         title="Afiliasi"
         notice="Hanya pintu ini yang membuat akun afiliasi. Status awal menunggu persetujuan. Bukan persetujuan otomatis."
         href="/api/auth/affiliate?next=/afiliasi"

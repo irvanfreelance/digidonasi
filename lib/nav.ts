@@ -55,12 +55,19 @@ export function navForRole(role: PanelRole, websiteOn: boolean): NavGroup[] {
 }
 
 export const DEFAULT_ORG = {
-  nama: process.env.ORG_NAME || "[DEMO] Lembaga Contoh",
-  namaSingkat: process.env.ORG_SHORT_NAME || "DEMO",
-  tagline: process.env.ORG_TAGLINE || "[DEMO] Bukan lembaga sungguhan",
-  logoUrl: null as string | null,
-  faviconUrl: null as string | null,
-  primaryColor: process.env.ORG_PRIMARY_COLOR || "#01665a",
-  sidebarColor: process.env.ORG_SIDEBAR_COLOR || "#01665a",
-  accentColor: process.env.ORG_ACCENT_COLOR || "#2e8b7a",
+  nama: process.env.ORG_NAME || "Yayasan Lentera Barokah",
+  namaSingkat: process.env.ORG_SHORT_NAME || "Lentera",
+  tagline: process.env.ORG_TAGLINE || "Kebaikan yang sampai kepada yang berhak",
+  shortDescription:
+    "Lembaga amil zakat yang menghimpun zakat, infak, sedekah, dan wakaf, lalu menyalurkannya untuk pangan, kesehatan, pendidikan, dan tanggap bencana.",
+  address: "Jl. Melati Rahayu No. 18, Sarijadi, Sukajadi, Bandung 40151",
+  logoUrl: "/brand/logo.svg",
+  faviconUrl: "/brand/favicon.svg",
+  primaryColor: process.env.ORG_PRIMARY_COLOR || "#0E6B56",
+  sidebarColor: process.env.ORG_SIDEBAR_COLOR || "#0A3F34",
+  accentColor: process.env.ORG_ACCENT_COLOR || "#C5922C",
+  facebookUrl: "https://facebook.com/lenterabarokah.example",
+  instagramUrl: "https://instagram.com/lenterabarokah.example",
+  whatsappNumber: "6281200000180",
+  publicEmail: "halo@lentera-barokah.example",
 };

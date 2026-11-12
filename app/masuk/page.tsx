@@ -1,7 +1,7 @@
 import { LoginScreen } from "@/components/auth/login-screen";
 import { MockLoginForm } from "@/components/auth/mock-form";
 import { authMode } from "@/lib/auth/doors";
-import { fallbackOrg } from "@/types/org";
+import { loadPublicOrg } from "@/lib/org-public";
 
 export default async function DonorLoginPage({
   searchParams,
@@ -14,7 +14,7 @@ export default async function DonorLoginPage({
     <>
       {mode === "mock" && query.mock === "1" && query.state ? <MockLoginForm action="/api/auth/donor/callback" state={query.state} /> : null}
       <LoginScreen
-        org={fallbackOrg()}
+        org={await loadPublicOrg()}
         title="Donatur"
         notice={
           mode === "unconfigured"

@@ -10,7 +10,7 @@ export default function Icon() {
         style={{
           width: 32,
           height: 32,
-          background: "#01665a",
+          background: "#0E6B56",
           color: "white",
           fontSize: 18,
           fontWeight: 700,
@@ -19,7 +19,7 @@ export default function Icon() {
           justifyContent: "center",
         }}
       >
-        D
+        L
       </div>
     ),
     { ...size },

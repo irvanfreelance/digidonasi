@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export type CampaignCardData = {
@@ -7,6 +8,7 @@ export type CampaignCardData = {
   image_alt?: string | null;
   category?: string | null;
   collected_amount?: string | number | null;
+  donor_count?: string | number | null;
   target_amount?: string | number | null;
   end_date?: string | Date | null;
   has_no_target?: boolean | null;
@@ -37,8 +39,15 @@ function asCard(row: Record<string, unknown>): CampaignCardData {
 }
 
 export function CampaignArt({ row, className }: { row: CampaignCardData; className: string }) {
-  const src = row.image_url && /^https?:\/\//.test(row.image_url) ? row.image_url : "";
-  if (src) {
+  const src = row.image_url || "";
+  if (src.startsWith("/")) {
+    return (
+      <span className={`${className} relative block overflow-hidden`}>
+        <Image src={src} alt={row.image_alt || ""} fill className="object-cover" sizes="(max-width: 768px) 90vw, 320px" />
+      </span>
+    );
+  }
+  if (/^https?:\/\//.test(src)) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img src={src} alt={row.image_alt || ""} className={`${className} object-cover`} />
@@ -64,7 +73,10 @@ export function CampaignListCard({ row }: { row: Record<string, unknown> }) {
       <div className="min-w-0 flex-1">
         <div className="text-[10px] font-bold uppercase tracking-wide text-teal-600">{card.category}</div>
         <div className="mt-0.5 line-clamp-2 text-sm font-bold leading-tight text-gray-900">{card.title}</div>
-        <div className="mt-1 text-xs text-gray-500">{rupiah(collected)}</div>
+        <div className="mt-1 text-xs text-gray-500">
+          {rupiah(collected)}
+          {Number(card.donor_count) > 0 ? ` · ${Number(card.donor_count).toLocaleString("id-ID")} donatur` : ""}
+        </div>
         {percent == null ? (
           <div className="mt-2 text-[10px] font-semibold text-teal-700">Tanpa target</div>
         ) : (
@@ -80,6 +92,24 @@ export function CampaignListCard({ row }: { row: Record<string, unknown> }) {
         )}
       </div>
     </Link>
+  );
+}
+
+const MARKDOWN_IMAGE = /!\[([^\]]*)\]\(([^)]+)\)/g;
+
+export function RichCopy({ text }: { text: string }) {
+  const images: { alt: string; src: string }[] = [];
+  const plain = text.replace(MARKDOWN_IMAGE, (_match, alt: string, src: string) => {
+    if (src.startsWith("/")) images.push({ alt, src });
+    return "";
+  });
+  return (
+    <>
+      {images.map((image) => (
+        <Image key={image.src} src={image.src} alt={image.alt} width={1200} height={800} className="mt-2 h-36 w-full rounded-xl object-cover" />
+      ))}
+      <p className="mb-0 whitespace-pre-line">{plain.trim()}</p>
+    </>
   );
 }
 

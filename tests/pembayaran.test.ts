@@ -93,7 +93,8 @@ test("tanda tangan, duplikat, urutan, nominal, kedaluwarsa, dan rekonsiliasi", a
   const lateBody = (await late.json()) as { status: string };
   assert.equal(lateBody.status, "PAID");
   const stats = await db.query(`SELECT collected_amount::text FROM campaign_stats WHERE campaign_id = (SELECT id FROM campaigns WHERE slug = 'demo-umum')`);
-  assert.equal(stats.rows[0].collected_amount, "15000");
+  const afterPaid = String(86400000 + 15000);
+  assert.equal(stats.rows[0].collected_amount, afterPaid);
 
   const second = await pay(db, 20000);
   await db.query("BEGIN");
@@ -119,7 +120,7 @@ test("tanda tangan, duplikat, urutan, nominal, kedaluwarsa, dan rekonsiliasi", a
   assert.equal(expired.reason, "kedaluwarsa");
   await db.query("COMMIT");
   const still = await db.query(`SELECT collected_amount::text FROM campaign_stats WHERE campaign_id = (SELECT id FROM campaigns WHERE slug = 'demo-umum')`);
-  assert.equal(still.rows[0].collected_amount, "15000");
+  assert.equal(still.rows[0].collected_amount, afterPaid);
 
   const fourth = await pay(db, 16000);
   const user = await db.query(`SELECT id FROM users WHERE email = 'admin-uji@example.com'`);
@@ -132,7 +133,7 @@ test("tanda tangan, duplikat, urutan, nominal, kedaluwarsa, dan rekonsiliasi", a
   const audit = await db.query(`SELECT count(*)::int AS n FROM audit_logs WHERE source = 'manual'`);
   const after = await db.query(`SELECT collected_amount::text FROM campaign_stats WHERE campaign_id = (SELECT id FROM campaigns WHERE slug = 'demo-umum')`);
   assert.equal(Number(audit.rows[0].n) >= 2, true);
-  assert.equal(after.rows[0].collected_amount, "15000");
+  assert.equal(after.rows[0].collected_amount, afterPaid);
   await db.end();
   delete process.env.DATABASE_URL;
 });

@@ -1,7 +1,7 @@
 import { LoginScreen } from "@/components/auth/login-screen";
 import { MockLoginForm } from "@/components/auth/mock-form";
 import { authMode } from "@/lib/auth/doors";
-import { fallbackOrg } from "@/types/org";
+import { loadPublicOrg } from "@/lib/org-public";
 
 export const metadata = { title: "Masuk panel", description: "Pintu panel." };
 
@@ -28,7 +28,7 @@ export default async function PanelLoginPage({
         <MockLoginForm action="/api/auth/admin/callback" state={query.state} />
       ) : null}
       <LoginScreen
-        org={fallbackOrg()}
+        org={await loadPublicOrg()}
         title="Panel"
         notice={notice}
         href="/api/auth/admin?next=/dashboard"

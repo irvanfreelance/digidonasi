@@ -16,7 +16,8 @@ function pageOf(query: PageQuery) {
 
 const campaignSelect = `c.id, c.slug, c.title, c.summary, c.image_url, c.image_alt, c.minimum_amount,
   c.target_amount, c.end_date, c.has_no_target, c.has_no_time_limit, c.is_urgent, c.is_carousel,
-  cat.name AS category, cat.slug AS category_slug, COALESCE(s.collected_amount, 0) AS collected_amount`;
+  cat.name AS category, cat.slug AS category_slug,
+  COALESCE(s.collected_amount, 0) AS collected_amount, COALESCE(s.donor_count, 0) AS donor_count`;
 
 const activeFilter = `c.publication_status = 'ACTIVE'
   AND ($1 = '%%' OR c.title ILIKE $1 OR cat.name ILIKE $1)
@@ -67,7 +68,8 @@ export async function listCatalogRails(sql: Sql) {
 
 export async function getPublicCampaign(sql: Sql, slug: string) {
   const rows = await sql(
-    `SELECT c.*, cat.name AS category_name, COALESCE(s.collected_amount, 0) AS collected_amount
+    `SELECT c.*, cat.name AS category_name, COALESCE(s.collected_amount, 0) AS collected_amount,
+            COALESCE(s.donor_count, 0) AS donor_count
      FROM campaigns c
      JOIN categories cat ON cat.id = c.category_id
      LEFT JOIN campaign_stats s ON s.campaign_id = c.id
