@@ -1,15 +1,27 @@
-import { NextResponse } from "next/server";
-import { dbQuery } from "@/lib/db";
-import { listCampaigns } from "@/lib/donasi/catalog";
+import { NextResponse } from 'next/server';
+import { redis } from '@/lib/redis';
+import { getAllCampaigns } from '@/lib/campaigns';
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const page = Number(url.searchParams.get("page") || "1");
-  const pageSize = Number(url.searchParams.get("pageSize") || "6");
+export async function GET(req: Request) {
   try {
-    const result = await listCampaigns(dbQuery, { q: url.searchParams.get("q") || "", page, pageSize });
-    return NextResponse.json(result);
-  } catch {
-    return NextResponse.json({ rows: [], page: 1, pageSize: 6, total: 0 });
+    const { searchParams } = new URL(req.url);
+    const searchQ = searchParams.get('q');
+    
+    const cacheKey = searchQ ? `api:campaigns:search:${searchQ.toLowerCase()}` : `api:campaigns:all`;
+    const cached = await redis.get(cacheKey);
+    
+    if (cached) {
+      return NextResponse.json(typeof cached === 'string' ? JSON.parse(cached) : cached);
+    }
+
+    const campaigns = await getAllCampaigns(searchQ);
+
+    const response = { status: 'success', data: campaigns };
+    await redis.set(cacheKey, JSON.stringify(response), { ex: 60 }); // 60s cache
+    
+    return NextResponse.json(response);
+  } catch (error) {
+    console.error('API Campaigns GET Error:', error);
+    return NextResponse.json({ status: 'error', message: 'Failed to fetch' }, { status: 500 });
   }
 }

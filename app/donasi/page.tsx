@@ -1,96 +1,164 @@
+import Image from "next/image";
 import Link from "next/link";
-import { CampaignListCard, UrgentCard } from "@/components/public/campaign-card";
-import { DonationShell } from "@/components/public/donation-shell";
-import { dbQuery } from "@/lib/db";
-import { listCampaigns, listCatalogRails } from "@/lib/donasi/catalog";
+import { query } from '@/lib/db';
+import { redis } from '@/lib/redis';
+import { Star, Clock, User, ChevronLeft } from "lucide-react";
+import { FacebookIcon, InstagramIcon, WhatsappIcon } from "@/components/icons/SocialIcons";
+import { formatIDR } from "@/lib/utils";
+import SearchInput from "@/components/SearchInput";
+import CampaignCard from "@/components/CampaignCard";
+import CampaignList from "@/components/CampaignList";
+import CategoryGrid from "@/components/CategoryGrid";
+import Header from "@/components/layout/Header";
+import AutoCarousel from "@/components/AutoCarousel";
+import { getAllCampaigns, getCarouselCampaigns, getActiveCategories } from "@/lib/campaigns";
 
-export const dynamic = "force-dynamic";
 
-export default async function DonasiPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string; kategori?: string }> }) {
-  const query = await searchParams;
-  const page = Number(query.page || "1");
-  const kategori = query.kategori || "";
-  let result = { rows: [] as Record<string, unknown>[], page: 1, pageSize: 6, total: 0 };
-  let rails = { categories: [] as Record<string, unknown>[], urgent: [] as Record<string, unknown>[], carousel: [] as Record<string, unknown>[] };
-  try {
-    result = await listCampaigns(dbQuery, { q: query.q || "", page, category: kategori });
-    rails = await listCatalogRails(dbQuery);
-  } catch {
-    result = { rows: [], page: 1, pageSize: 6, total: 0 };
+async function getData(searchQ?: string) {
+  // 1. Fetch campaigns using optimized service with real-time Redis stats
+  const campaigns = await getAllCampaigns(searchQ);
+  
+  // 2. Fetch categories directly (could also be moved to a service later)
+
+  const categories = await getActiveCategories();
+
+  // 2.5 Fetch Carousel Campaigns (Cached Forever)
+  const cacheKeyCarousel = `api:campaigns:carousel_v1`;
+  let carouselCampaigns = await redis.get(cacheKeyCarousel);
+  if (!carouselCampaigns) {
+    carouselCampaigns = await getCarouselCampaigns();
+    await redis.set(cacheKeyCarousel, JSON.stringify(carouselCampaigns)); // Forever TTL
+  } else if (typeof carouselCampaigns === 'string') {
+    carouselCampaigns = JSON.parse(carouselCampaigns);
   }
-  const pages = Math.max(1, Math.ceil(result.total / result.pageSize));
-  const href = (nextPage: number) => {
-    const params = new URLSearchParams();
-    if (query.q) params.set("q", query.q);
-    if (kategori) params.set("kategori", kategori);
-    if (nextPage > 1) params.set("page", String(nextPage));
-    const text = params.toString();
-    return text ? `/donasi?${text}` : "/donasi";
+
+  // 3. Fetch configs
+  const cacheKeyConf = `ngo:configs:global_v4`;
+  let configsData: any = await redis.get(cacheKeyConf);
+  if (!configsData) {
+    const confRes = await query('SELECT * FROM ngo_configs LIMIT 1');
+    if (confRes.length > 0) {
+      configsData = confRes[0];
+      await redis.set(cacheKeyConf, JSON.stringify(configsData), { ex: 3600 });
+    } else {
+      configsData = {};
+    }
+  } else if (typeof configsData === 'string') {
+    configsData = JSON.parse(configsData);
+  }
+
+  return { 
+    campaigns: campaigns || [], 
+    carouselCampaigns: (carouselCampaigns as any) || [],
+    categories,
+    configs: configsData
   };
+}
+
+export default async function Home(props: { searchParams?: Promise<{ [key: string]: string | string[] | undefined }> }) {
+  const searchParams = await props.searchParams;
+  const q = typeof searchParams?.q === 'string' ? searchParams.q : undefined;
+  const isSearching = !!q;
+
+  const { campaigns: allCampaigns, carouselCampaigns, categories, configs } = await getData(q);
+  const urgentCampaigns = allCampaigns.filter((c: any) => c.is_urgent && !isSearching);
+
   return (
-    <DonationShell>
-      <form action="/donasi" className="relative mx-5 mt-5 mb-4">
-        {kategori ? <input type="hidden" name="kategori" value={kategori} /> : null}
-        <input name="q" defaultValue={query.q || ""} placeholder="Cari program atau kategori" className="w-full rounded-full border border-gray-100 bg-white py-3.5 pr-4 pl-11 text-sm text-gray-800" />
-        <span className="pointer-events-none absolute top-3.5 left-4 text-xs text-gray-400">Cari</span>
-      </form>
-      {rails.carousel.length > 0 ? (
-        <div className="mb-6 flex snap-x gap-2.5 overflow-x-auto px-5 pb-2">
-          {rails.carousel.map((row) => (
-            <Link key={String(row.slug)} href={`/donasi/${row.slug}`} className="relative h-36 min-w-[88%] shrink-0 snap-center overflow-hidden rounded-2xl shadow-md">
-              <div className="absolute inset-0 bg-gradient-to-r from-teal-900/85 to-teal-700/30" />
-              <div className="relative flex h-full flex-col justify-center p-5 text-white">
-                <div className="mb-1 text-[10px] font-bold tracking-wider text-teal-100 uppercase">{String(row.category)}</div>
-                <div className="line-clamp-2 w-5/6 text-lg leading-tight font-bold">{String(row.title)}</div>
+    <div className="flex flex-col h-full bg-gradient-to-b from-brand-50/60 to-slate-50 relative pb-24">
+      {/* Header */}
+      <Header isSearching={isSearching} logoUrl={configs?.logo_url} ngoName={configs?.ngo_name} />
+
+      <SearchInput />
+
+      {!isSearching && (
+        <>
+          {/* Banners Carousel */}
+          <AutoCarousel campaigns={carouselCampaigns} />
+
+          {/* Categories */}
+          <div className="px-5 mt-8 mb-8">
+            <h2 className="font-bold text-gray-800 text-base mb-4">Kategori Pilihan</h2>
+            <CategoryGrid categories={categories} />
+          </div>
+
+          {/* Urgent Highlight */}
+          {urgentCampaigns.length > 0 && (
+            <div className="mt-2 mb-2 bg-gradient-to-b from-rose-50/80 to-transparent pt-5 pb-1 border-t border-rose-100/50">
+              <div className="px-5 flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="bg-rose-100 p-1.5 rounded-lg"><Clock size={18} className="text-rose-500" /></div>
+                  <h2 className="font-bold text-gray-800 text-base">Bantuan Mendesak</h2>
+                </div>
+                <Link href="/donasi/mendesak" className="text-rose-500 font-bold text-sm hover:underline">Lainnya</Link>
               </div>
-            </Link>
-          ))}
-        </div>
-      ) : null}
-      <section className="mb-6 px-5">
-        <h2 className="mb-3 text-sm font-extrabold text-gray-900">Kategori</h2>
-        <div className="flex gap-3 overflow-x-auto pb-1">
-          <Link href="/donasi" className={`flex min-w-[72px] flex-col items-center text-[11px] font-semibold ${kategori ? "text-gray-500" : "text-teal-700"}`}>
-            <span className="mb-2 flex h-14 w-14 items-center justify-center rounded-2xl border border-gray-50 bg-white shadow-sm">Semua</span>
-            Semua
-          </Link>
-          {rails.categories.map((category) => (
-            <Link key={String(category.slug)} href={`/donasi?kategori=${category.slug}`} className={`flex min-w-[72px] flex-col items-center text-[11px] font-semibold ${kategori === category.slug ? "text-teal-700" : "text-gray-600"}`}>
-              <span className="mb-2 flex h-14 w-14 items-center justify-center rounded-2xl border border-gray-50 bg-teal-50 font-bold text-teal-700 shadow-sm">
-                {String(category.name).slice(0, 1)}
-              </span>
-              {String(category.name)}
-            </Link>
-          ))}
-        </div>
-      </section>
-      {rails.urgent.length > 0 && !kategori ? (
-        <section className="mb-6">
-          <div className="mb-3 flex items-center justify-between px-5">
-            <h2 className="text-sm font-extrabold text-gray-900">Butuh segera</h2>
-            <Link href="/donasi/mendesak" className="text-[11px] font-bold text-teal-700">Lainnya</Link>
+              <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 px-5 pb-4 no-scrollbar">
+                {urgentCampaigns.map((camp: any) => (
+                  <div key={camp.id} className="w-[46%] shrink-0 snap-center">
+                    <CampaignCard camp={camp} variant="grid" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Campaign List */}
+      <div className="px-5 pb-6">
+        {isSearching ? (
+          <div className="mb-5 pt-4">
+            <h2 className="font-bold text-gray-800 text-xl tracking-tight">
+              Hasil Pencarian
+            </h2>
+            <p className="text-sm font-medium text-gray-500 mt-1">{allCampaigns.length} Program Ditemukan</p>
           </div>
-          <div className="flex snap-x gap-3 overflow-x-auto px-5 pb-2">
-            {rails.urgent.map((row) => (
-              <UrgentCard key={String(row.slug)} row={row} />
-            ))}
+        ) : (
+          <h2 className="font-bold text-gray-800 text-base mb-4 mt-0">
+            Rekomendasi Kebaikan
+          </h2>
+        )}
+
+        {allCampaigns.length === 0 ? (
+          <div className="text-center py-10">
+            <p className="text-gray-500">Tidak ada kampanye yang sesuai dengan pencarian Anda.</p>
           </div>
-        </section>
-      ) : null}
-      <section className="px-5">
-        <h2 className="mb-3 text-sm font-extrabold text-gray-900">Program</h2>
-        <div className="grid gap-3">
-          {result.rows.map((row) => (
-            <CampaignListCard key={String(row.slug)} row={row} />
-          ))}
+        ) : (
+          <CampaignList campaigns={allCampaigns} categories={categories} collapsible={!isSearching} />
+        )}
+      </div>
+
+      {/* Footer Info Lembaga */}
+      {!isSearching && (
+        <div className="px-5 py-8 bg-slate-100 border-t border-gray-200 mt-4">
+          <div className="flex items-center gap-2 mb-4">
+            {configs?.logo_url ? (
+              <img src={configs.logo_url} alt="Logo" className="h-8 w-auto object-contain" />
+            ) : (
+              <>
+                <div className="w-8 h-8 bg-[#83b64e] rounded-lg flex items-center justify-center shadow-sm">
+                  <Star size={16} className="text-white fill-white" />
+                </div>
+                <span className="font-extrabold text-[#83b64e] text-base leading-none tracking-tight">LAZ Darul Hikam</span>
+              </>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 leading-relaxed mb-4 text-justify">
+            {configs?.short_description || "Lembaga filantropi independen yang berdedikasi untuk menyalurkan kebaikan donatur secara transparan, profesional, dan tepat sasaran."}
+          </p>
+          <div className="text-xs text-gray-500 mb-5">
+            <p className="font-bold text-gray-700 mb-1">Alamat Kantor Pusat</p>
+            <p>{configs?.address || "Jl. Kebaikan Bangsa No. 99, Gedung Amal Lt. 2, Jakarta Selatan"}</p>
+          </div>
+          <div className="flex gap-4">
+            <a href={configs?.facebook_url || '#'} className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-brand-600 hover:bg-brand-50 transition-colors"><FacebookIcon size={14} /></a>
+            <a href={configs?.instagram_url || '#'} className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-brand-600 hover:bg-brand-50 transition-colors"><InstagramIcon size={14} /></a>
+            <a href={configs?.whatsapp_number ? `https://wa.me/${configs.whatsapp_number}` : '#'} className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-brand-600 hover:bg-brand-50 transition-colors"><WhatsappIcon size={14} /></a>
+          </div>
+          <div className="mt-6 pt-4 border-t border-gray-200 text-center">
+            <p className="text-[10px] text-gray-400">© {new Date().getFullYear()} {configs?.ngo_name || 'LAZ Darul Hikam'}. All rights reserved.</p>
+          </div>
         </div>
-        {result.rows.length === 0 ? <p className="text-sm text-gray-500">Belum ada program tayang untuk pencarian ini.</p> : null}
-        <div className="mt-4 flex items-center justify-between text-[13px] font-semibold">
-          {result.page > 1 ? <Link href={href(result.page - 1)} className="min-h-11 text-teal-700">Sebelumnya</Link> : <span />}
-          <span className="text-gray-400">{result.page}/{pages}</span>
-          {result.page < pages ? <Link href={href(result.page + 1)} className="min-h-11 text-teal-700">Muat lagi</Link> : <span />}
-        </div>
-      </section>
-    </DonationShell>
+      )}
+    </div>
   );
 }

@@ -1,0 +1,155 @@
+import { NextResponse } from 'next/server';
+import { query } from '@/lib/panel/db';
+import { invalidateCache } from '@/lib/panel/redis';
+import { z } from 'zod';
+
+const configSchema = z.object({
+  ngo_name: z.string().min(3),
+  logo_url: z.string().optional().nullable(),
+  favicon_url: z.string().optional().nullable(),
+  video_url: z.string().optional().nullable(),
+  short_description: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  legal_info: z.string().optional().nullable(),
+  primary_color: z.string().regex(/^#[0-9A-F]{6}$/i).default('#1086b1'),
+  whatsapp_number: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  office_hours: z.string().optional().nullable(),
+  instagram_url: z.string().optional().nullable(),
+  facebook_url: z.string().optional().nullable(),
+  meta_pixel_id: z.string().optional().nullable(),
+  meta_capi_token: z.string().optional().nullable(),
+  google_ads_id: z.string().optional().nullable(),
+  google_developer_token: z.string().optional().nullable(),
+  google_analytic_id: z.string().optional().nullable(),
+  tiktok_pixel_id: z.string().optional().nullable(),
+  tiktok_events_api_token: z.string().optional().nullable(),
+  jejak_kebaikan_title: z.string().optional().nullable(),
+  jejak_kebaikan_subtitle: z.string().optional().nullable(),
+});
+
+export async function GET() {
+  try {
+    const res = await query('SELECT * FROM ngo_configs LIMIT 1');
+    return NextResponse.json(res.rows[0] || {});
+  } catch (error: any) {
+    console.error('API NGO Config Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    const body = await req.json();
+    const validated = configSchema.parse(body);
+    
+    // Check if config exists
+    const check = await query('SELECT id FROM ngo_configs LIMIT 1');
+    
+    let res;
+    if (check.rows.length > 0) {
+      const sql = `
+        UPDATE ngo_configs
+        SET
+          ngo_name = $1,
+          logo_url = $2,
+          favicon_url = $3,
+          video_url = $4,
+          short_description = $5,
+          address = $6,
+          legal_info = $7,
+          primary_color = $8,
+          whatsapp_number = $9,
+          email = $10,
+          office_hours = $11,
+          instagram_url = $12,
+          facebook_url = $13,
+          meta_pixel_id = $14,
+          meta_capi_token = $15,
+          google_ads_id = $16,
+          google_developer_token = $17,
+          google_analytic_id = $18,
+          tiktok_pixel_id = $19,
+          tiktok_events_api_token = $20,
+          jejak_kebaikan_title = $21,
+          jejak_kebaikan_subtitle = $22,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $23
+        RETURNING *
+      `;
+      res = await query(sql, [
+        validated.ngo_name,
+        validated.logo_url,
+        validated.favicon_url,
+        validated.video_url,
+        validated.short_description,
+        validated.address,
+        validated.legal_info,
+        validated.primary_color,
+        validated.whatsapp_number,
+        validated.email,
+        validated.office_hours,
+        validated.instagram_url,
+        validated.facebook_url,
+        validated.meta_pixel_id,
+        validated.meta_capi_token,
+        validated.google_ads_id,
+        validated.google_developer_token,
+        validated.google_analytic_id,
+        validated.tiktok_pixel_id,
+        validated.tiktok_events_api_token,
+        validated.jejak_kebaikan_title,
+        validated.jejak_kebaikan_subtitle,
+        check.rows[0].id
+      ]);
+    } else {
+      const sql = `
+        INSERT INTO ngo_configs (
+          ngo_name, logo_url, favicon_url, video_url, short_description, address, legal_info,
+          primary_color, whatsapp_number, email, office_hours, instagram_url, facebook_url,
+          meta_pixel_id, meta_capi_token, google_ads_id, google_developer_token, google_analytic_id,
+          tiktok_pixel_id, tiktok_events_api_token, jejak_kebaikan_title, jejak_kebaikan_subtitle
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+        RETURNING *
+      `;
+      res = await query(sql, [
+        validated.ngo_name,
+        validated.logo_url,
+        validated.favicon_url,
+        validated.video_url,
+        validated.short_description,
+        validated.address,
+        validated.legal_info,
+        validated.primary_color,
+        validated.whatsapp_number,
+        validated.email,
+        validated.office_hours,
+        validated.instagram_url,
+        validated.facebook_url,
+        validated.meta_pixel_id,
+        validated.meta_capi_token,
+        validated.google_ads_id,
+        validated.google_developer_token,
+        validated.google_analytic_id,
+        validated.tiktok_pixel_id,
+        validated.tiktok_events_api_token,
+        validated.jejak_kebaikan_title,
+        validated.jejak_kebaikan_subtitle
+      ]);
+    }
+    
+    try {
+      await invalidateCache(['ngo_config', 'ngo_settings', 'ngo:configs:global_v4']);
+    } catch (redisError) {
+      console.warn('Redis flush failed, but database was updated:', redisError);
+    }
+    
+    return NextResponse.json(res.rows[0]);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ errors: error.issues }, { status: 400 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

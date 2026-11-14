@@ -1,0 +1,836 @@
+'use client';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Copy, Clock, ChevronDown, Upload, Image as ImageIcon, CheckCircle, RefreshCcw, Loader2, Download } from 'lucide-react';
+import Link from 'next/link';
+import { formatIDR } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
+
+// Shrink phone photos (often 5-10MB) so they fit the ~4.5MB serverless body limit.
+async function compressImage(file: File, maxSide = 1600, quality = 0.8): Promise<File> {
+  if (!file.type.startsWith('image/') || file.type === 'image/gif') return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size <= 1_500_000) return file;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', quality));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file;
+  }
+}
+
+export default function InvoiceInteractive({ invoice, invoiceCode }: { invoice: any, invoiceCode?: string }) {
+  const router = useRouter();
+  const [copiedVa, setCopiedVa] = useState(false);
+  const [copiedAmount, setCopiedAmount] = useState(false);
+  const [timeLeft, setTimeLeft] = useState({ h: '23', m: '59', s: '59' });
+  const [isExpired, setIsExpired] = useState(false);
+  const [expireDateStr, setExpireDateStr] = useState('');
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  
+  // Upload States
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(invoice?.proof_transfer || null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isManual = invoice.payment_method_name?.toLowerCase().includes('manual') || invoice.va_number === '7123456789';
+
+  let displayVa = invoice.va_number || '';
+  let displayName = 'Yayasan Peduli Sesama';
+
+  if (isManual) {
+    const manualSource = (invoice.va_number && invoice.va_number.includes('|'))
+      ? invoice.va_number
+      : (invoice.payment_method_code && invoice.payment_method_code.includes('|'))
+        ? invoice.payment_method_code
+        : null;
+
+    if (manualSource) {
+      const parts = manualSource.split('|');
+      displayVa = parts[0];
+      displayName = parts[1];
+    } else {
+      displayVa = invoice.va_number || invoice.payment_method_code || 'Tidak tersedia';
+    }
+  } else {
+    displayVa = displayVa || 'Tidak tersedia';
+  }
+
+  const hasAutoTriggeredSnap = useRef(false);
+
+  const triggerSnap = useCallback(() => {
+    if (!invoice?.payment_url) return;
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(invoice.payment_url);
+    } catch {
+      parsed = { redirect_url: invoice.payment_url };
+    }
+
+    const snapToken = parsed.snap_token;
+    const redirectUrl = parsed.redirect_url || invoice.payment_url;
+
+    if (snapToken && typeof window !== 'undefined' && (window as any).snap) {
+      (window as any).snap.pay(snapToken, {
+        onSuccess: () => router.push(`/status/${invoiceCode || invoice.invoice_code}`),
+        onPending: () => router.refresh(),
+        onError: () => alert('Pembayaran gagal atau dibatalkan.'),
+        onClose: () => console.log('Snap modal closed'),
+      });
+    } else if (redirectUrl && typeof window !== 'undefined') {
+      window.open(redirectUrl, '_blank');
+    }
+  }, [invoice, invoiceCode, router]);
+
+  // Load Midtrans Snap JS dynamically & Auto-trigger modal on mount
+  useEffect(() => {
+    let parsed: any = null;
+    if (invoice?.payment_url) {
+      try { parsed = JSON.parse(invoice.payment_url); } catch { parsed = { redirect_url: invoice.payment_url }; }
+    }
+
+    const isMidtrans = parsed?.snap_token || parsed?.provider === 'midtrans' || (invoice?.payment_provider?.toLowerCase() === 'midtrans' && invoice?.payment_url);
+
+    if (!isMidtrans) return;
+
+    const scriptId = 'midtrans-snap-script';
+    let script = document.getElementById(scriptId) as HTMLScriptElement | null;
+
+    const attemptAutoTrigger = () => {
+      if (!hasAutoTriggeredSnap.current && typeof window !== 'undefined' && (window as any).snap) {
+        hasAutoTriggeredSnap.current = true;
+        setTimeout(() => {
+          triggerSnap();
+        }, 300);
+      }
+    };
+
+    if (!script) {
+      script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://app.midtrans.com/snap/snap.js';
+      script.setAttribute('data-client-key', process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || 'Mid-client-BHJdJcj_-5xRENuz');
+      script.onload = () => {
+        attemptAutoTrigger();
+      };
+      document.body.appendChild(script);
+    } else {
+      if ((window as any).snap) {
+        attemptAutoTrigger();
+      } else {
+        script.addEventListener('load', attemptAutoTrigger);
+      }
+    }
+  }, [invoice, triggerSnap]);
+
+  // Auto-redirect for Xendit e-wallets
+  useEffect(() => {
+    if (invoice?.payment_url) {
+      const pmType = invoice.payment_method_type?.toLowerCase() || '';
+      const provider = invoice.payment_provider?.toLowerCase() || '';
+      const isEwallet = pmType.includes('e_wallet') || pmType.includes('ewallet') || pmType.includes('e-wallet');
+      if (isEwallet && provider === 'xendit') {
+        window.location.href = invoice.payment_url;
+      }
+    }
+  }, [invoice]);
+
+  // Realtime countdown based on expire_at or created_at + 24h
+  useEffect(() => {
+    if (!invoice.created_at && !invoice.invoice_code?.startsWith('SIM-')) return;
+    
+    const createdAt = new Date(invoice.created_at || new Date());
+    
+    // Expire time is the minimum of 6 hours from now or end of today (23:59:59)
+    const target6Hours = new Date(createdAt.getTime() + 6 * 60 * 60 * 1000);
+    const endOfDay = new Date(createdAt);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    const expireTime = target6Hours < endOfDay ? target6Hours : endOfDay;
+
+    const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const d = expireTime;
+    const dateStr = `${dayNames[d.getDay()]}, ${d.getDate()} ${monthNames[d.getMonth()].toLowerCase()} ${d.getFullYear()} Pukul ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
+    setExpireDateStr(dateStr);
+
+    const interval = setInterval(() => {
+      const now = new Date();
+      const diff = expireTime.getTime() - now.getTime();
+      
+      if (diff <= 0) {
+        setTimeLeft({ h: '00', m: '00', s: '00' });
+        setIsExpired(true);
+        clearInterval(interval);
+        return;
+      }
+      
+      const h = Math.floor((diff / (1000 * 60 * 60))).toString().padStart(2, '0');
+      const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)).toString().padStart(2, '0');
+      const s = Math.floor((diff % (1000 * 60)) / 1000).toString().padStart(2, '0');
+      
+      setTimeLeft({ h, m, s });
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [invoice.created_at, invoice.invoice_code]);
+
+  const handleCopyVa = () => {
+    if (displayVa && displayVa !== 'Tidak tersedia') {
+      const cleanVa = displayVa.replace(/\s+/g, '');
+      navigator.clipboard.writeText(cleanVa);
+    }
+    setCopiedVa(true);
+    setTimeout(() => setCopiedVa(false), 2000);
+  };
+
+  const handleCopyAmount = () => {
+    const amountStr = Number(invoice.total_amount).toString();
+    navigator.clipboard.writeText(amountStr);
+    setCopiedAmount(true);
+    setTimeout(() => setCopiedAmount(false), 2000);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      // Create local preview
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+  };
+
+  const handleClearFile = () => {
+    setSelectedFile(null);
+    setPreviewUrl(invoice?.proof_transfer || null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirmSubmit = () => {
+    if (isManual && selectedFile) {
+      setShowConfirmModal(true);
+    } else {
+      executeSubmit();
+    }
+  };
+
+  const executeSubmit = async () => {
+    setShowConfirmModal(false);
+    // If not manual or no file selected, just simulate success redirect
+    if (!isManual || !selectedFile) {
+      router.push(`/status/${invoiceCode || 'SIM'}`);
+      router.refresh();
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      // 1. Upload file to our API (Vercel Blob)
+      const form = new FormData();
+      form.append('file', await compressImage(selectedFile));
+      
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: form
+      });
+      
+      const uploadData = await uploadRes.json().catch(() => ({}));
+      if (!uploadRes.ok || !uploadData.url) throw new Error(uploadData.error || 'Upload failed');
+      const fileUrl = uploadData.url;
+
+      // 2. We skip updating the DB here for SIM-, but we could if we wanted
+      if (invoice.invoice_code && !invoice.invoice_code.startsWith('SIM-')) {
+        const saveRes = await fetch(`/api/invoice/${invoice.invoice_code}/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ proofUrl: fileUrl })
+        });
+        if (!saveRes.ok) {
+          const saveData = await saveRes.json().catch(() => ({}));
+          throw new Error(saveData.error || 'Gagal menyimpan bukti transfer');
+        }
+      }
+
+      // Upload success, go back to home or success
+      router.push(`/status/${invoiceCode || 'SIM'}`);
+      router.refresh();
+    } catch (err: any) {
+      console.error(err);
+      alert(`Gagal mengunggah foto: ${err?.message || 'terjadi kesalahan'}. Silakan coba lagi.`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    setIsDownloadingPdf(true);
+    try {
+      const { toPng } = await import('html-to-image');
+      const { jsPDF } = await import('jspdf');
+      
+      const element = document.getElementById('pdf-template');
+      if (!element) return;
+      
+      const dataUrl = await toPng(element, { 
+        cacheBust: true, 
+        backgroundColor: '#ffffff',
+        pixelRatio: 2
+      });
+
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`${invoice.invoice_code || 'Invoice'}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert('Gagal mendownload PDF. Pastikan koneksi stabil.');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col min-h-screen bg-slate-50 relative pb-24">
+      {/* Toast VA */}
+      {copiedVa && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-black text-white px-4 py-2 rounded-lg shadow-xl text-sm font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top-4">
+          <div className="w-2 h-2 rounded-full bg-brand-400"></div> Nomor berhasil disalin
+        </div>
+      )}
+      {/* Toast Amount */}
+      {copiedAmount && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-black text-white px-4 py-2 rounded-lg shadow-xl text-sm font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top-4">
+          <div className="w-2 h-2 rounded-full bg-brand-400"></div> Nominal berhasil disalin
+        </div>
+      )}
+
+      <div className="bg-white p-4 flex items-center border-b border-gray-100 shadow-sm z-10 sticky top-0 justify-center">
+        <h2 className="font-bold text-lg text-gray-800">Instruksi Pembayaran</h2>
+      </div>
+
+      <div className="p-5 pb-40 flex-1 w-full" id="invoice-content">
+        <div className="bg-[#FFFCEB] border border-[#FDEB96] rounded-2xl p-6 mb-6 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+            <Clock size={80} />
+          </div>
+          
+          <div className="flex flex-col items-center text-center mb-5">
+            <div className="flex items-center gap-1.5 text-[#854d0e] mb-1">
+              <Clock size={14} className="animate-pulse" />
+              <span className="text-[11px] font-bold uppercase tracking-wider">Batas Waktu Pembayaran</span>
+            </div>
+            <h3 className="font-medium text-[#713f12] text-base leading-tight">
+              {expireDateStr}
+            </h3>
+          </div>
+          
+          <div className="flex justify-center items-center gap-3">
+             <div className="flex flex-col items-center gap-1">
+               <div className="bg-white border border-[#fef08a] rounded-xl w-14 h-14 flex items-center justify-center shadow-sm">
+                  <span className="text-2xl font-black text-[#713f12]">{timeLeft.h}</span>
+               </div>
+               <span className="text-[10px] font-bold text-[#a16207] uppercase">Jam</span>
+             </div>
+             <span className="text-2xl font-bold text-[#fef08a] mb-5">:</span>
+             <div className="flex flex-col items-center gap-1">
+               <div className="bg-white border border-[#fef08a] rounded-xl w-14 h-14 flex items-center justify-center shadow-sm">
+                  <span className="text-2xl font-black text-[#713f12]">{timeLeft.m}</span>
+               </div>
+               <span className="text-[10px] font-bold text-[#a16207] uppercase">Menit</span>
+             </div>
+             <span className="text-2xl font-bold text-[#fef08a] mb-5">:</span>
+             <div className="flex flex-col items-center gap-1">
+               <div className="bg-white border border-[#fef08a] rounded-xl w-14 h-14 flex items-center justify-center shadow-sm">
+                  <span className="text-2xl font-black text-[#713f12]">{timeLeft.s}</span>
+               </div>
+               <span className="text-[10px] font-bold text-[#a16207] uppercase">Detik</span>
+             </div>
+          </div>
+          
+            {isExpired && (
+            <div className="mt-4 pt-4 border-t border-yellow-200/50 w-full">
+              <p className="text-red-600 font-bold text-sm text-center">Waktu pembayaran telah habis.</p>
+            </div>
+          )}
+        </div>
+
+
+
+        <div className="bg-white border text-center border-gray-100 rounded-2xl p-6 shadow-sm mb-6 relative overflow-hidden">
+           <div className="absolute top-0 left-0 w-full h-1 bg-brand-500"></div>
+           <p className="text-gray-500 text-sm font-semibold mb-1">Total Tagihan</p>
+           
+           <div className="flex flex-col items-center justify-center mb-6">
+             {isManual ? (() => {
+               const amtStr = Number(invoice.total_amount).toString();
+               const last3 = amtStr.length >= 3 ? amtStr.slice(-3) : amtStr;
+               const rest = amtStr.length >= 3 ? amtStr.slice(0, -3) : '';
+               const formattedRest = rest ? formatIDR(Number(rest)) : 'Rp ';
+               return (
+                 <div className="w-full flex flex-col items-center">
+                   <div className="flex items-center justify-center gap-3 mb-2 w-full border border-gray-200 p-4 rounded-xl">
+                     <h1 className="text-3xl font-extrabold text-gray-700">
+                       {formattedRest.replace(',00', '')}.<span className="bg-yellow-300 text-gray-800 px-1 rounded">{last3}</span>
+                     </h1>
+                     <button onClick={handleCopyAmount} className="text-blue-600 border border-blue-600 bg-white px-3 py-1.5 rounded-lg hover:bg-blue-50 font-bold text-sm transition-colors active:scale-95" title="Salin Nominal">
+                       Salin
+                     </button>
+                   </div>
+                   <div className="w-full bg-[#FFFCEB] border border-[#FDEB96] p-3 rounded-lg flex items-center gap-2 mb-2">
+                     <div className="w-5 h-5 rounded-full border-2 border-red-500 text-red-500 flex items-center justify-center font-bold text-xs shrink-0">!</div>
+                     <p className="text-sm font-semibold text-gray-800">Pastikan nominal sesuai hingga 3 digit terakhir</p>
+                   </div>
+                   <p className="text-xs text-gray-500 italic text-left w-full">* 3 Angka terakhir atau kode unik akan didonasikan</p>
+                 </div>
+               );
+             })() : (
+               <div className="flex items-center justify-center gap-3 w-full">
+                 <h1 className="text-3xl font-extrabold text-brand-600">{formatIDR(Number(invoice.total_amount))}</h1>
+                 <button onClick={handleCopyAmount} className="text-brand-600 bg-brand-50 p-1.5 rounded-lg hover:bg-brand-100 transition-colors active:scale-95" title="Salin Nominal">
+                   <Copy size={16} />
+                 </button>
+               </div>
+             )}
+           </div>
+           
+            {(() => {
+             const pmType = invoice.payment_method_type?.toLowerCase() || '';
+             const isVA = pmType.includes('va') || pmType.includes('bank') || pmType.includes('transfer');
+             const isManualLocal = pmType.includes('manual') || isManual;
+             const isVaValid = displayVa && displayVa !== 'Tidak tersedia';
+
+             // Check if payment_url contains Midtrans Snap JSON or URL
+             let parsedUrl: any = null;
+             if (invoice.payment_url) {
+               try { parsedUrl = JSON.parse(invoice.payment_url); } catch { parsedUrl = { redirect_url: invoice.payment_url }; }
+             }
+             const isMidtransSnap = parsedUrl?.snap_token || parsedUrl?.provider === 'midtrans' || (invoice.payment_provider?.toLowerCase() === 'midtrans' && invoice.payment_url);
+
+             if (isMidtransSnap && (!isVaValid || !isVA)) {
+               return (
+                 <div className="bg-slate-50 rounded-xl p-6 border border-dashed border-gray-300 relative text-center">
+                   <div className="flex flex-col items-center gap-2 mb-4">
+                     {invoice.payment_method_logo && (
+                       <img 
+                         src={invoice.payment_method_logo} 
+                         alt={invoice.payment_method_name} 
+                         className="h-8 max-w-[100px] object-contain rounded-md mb-1" 
+                       />
+                     )}
+                     <p className="text-xs text-gray-500 font-semibold">Bayar Menggunakan {invoice.payment_method_name}</p>
+                   </div>
+                   <button 
+                     onClick={triggerSnap}
+                     className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform text-base"
+                   >
+                     Bayar Sekarang ({invoice.payment_method_name})
+                   </button>
+                   <p className="text-[10px] text-gray-400 mt-3 italic">*Klik tombol untuk membuka Modal / Instruksi Pembayaran Midtrans.</p>
+                 </div>
+               );
+             }
+
+             return isVA || isManualLocal ? (
+               isVaValid ? (
+                 <div className="bg-slate-50 rounded-xl p-4 border border-dashed border-gray-300 relative text-left">
+                   <div className="flex items-center justify-between mb-2">
+                     <p className="text-xs text-gray-500 font-semibold">{isManualLocal ? 'Nomor Rekening' : 'Nomor Virtual Account'} ({invoice.payment_method_name})</p>
+                     {invoice.payment_method_logo && (
+                       <img 
+                         src={invoice.payment_method_logo} 
+                         alt={invoice.payment_method_name} 
+                         className="h-5 max-w-[80px] object-contain rounded-md" 
+                       />
+                     )}
+                   </div>
+                   <div className="flex items-center justify-between gap-3">
+                     <div className="flex flex-col">
+                       <span className="text-2xl font-bold tracking-wider text-gray-800">{displayVa}</span>
+                       {isManualLocal && <span className="text-xs text-gray-500 font-medium mt-1">a/n {displayName}</span>}
+                     </div>
+                     <button onClick={handleCopyVa} className="text-brand-600 bg-brand-50 p-2 shrink-0 rounded-lg hover:bg-brand-100 transition-colors active:scale-95" title="Salin">
+                       <Copy size={18} />
+                     </button>
+                   </div>
+                 </div>
+               ) : invoice.payment_url ? (
+                 <div className="bg-slate-50 rounded-xl p-6 border border-dashed border-gray-300 relative text-center">
+                   <div className="flex flex-col items-center gap-2 mb-4">
+                     {invoice.payment_method_logo && (
+                       <img 
+                         src={invoice.payment_method_logo} 
+                         alt={invoice.payment_method_name} 
+                         className="h-8 max-w-[100px] object-contain rounded-md mb-1" 
+                       />
+                     )}
+                     <p className="text-xs text-gray-500 font-semibold">Bayar Menggunakan {invoice.payment_method_name}</p>
+                   </div>
+                   <button 
+                     onClick={triggerSnap}
+                     className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform text-base"
+                   >
+                     Bayar Sekarang ({invoice.payment_method_name})
+                   </button>
+                   <p className="text-[10px] text-gray-400 mt-3 italic">*Klik tombol di atas untuk membuka Modal Pembayaran Midtrans.</p>
+                 </div>
+               ) : (
+                 <div className="bg-slate-50 rounded-xl p-4 border border-dashed border-gray-300 relative text-left">
+                   <p className="text-xs text-red-500 font-semibold">Nomor Virtual Account tidak dapat dibuat. Silakan coba metode pembayaran lain.</p>
+                 </div>
+               )
+             ) : (pmType.includes('retail') || pmType.includes('outlet') || pmType.includes('over_the_counter')) ? (
+               <div className="bg-slate-50 rounded-xl p-4 border border-dashed border-gray-300 relative text-left">
+                 <div className="flex items-center justify-between mb-3">
+                   <p className="text-xs text-gray-500 font-semibold">Kode Pembayaran ({invoice.payment_method_name})</p>
+                   {invoice.payment_method_logo && (
+                     <img 
+                       src={invoice.payment_method_logo} 
+                       alt={invoice.payment_method_name} 
+                       className="h-5 max-w-[80px] object-contain rounded-md" 
+                     />
+                   )}
+                 </div>
+                 <h2 className="text-3xl font-black tracking-widest text-gray-800 mb-4">{invoice.va_number}</h2>
+                 <div className="bg-white p-3 rounded-lg border border-gray-200 inline-block mb-3">
+                   <img 
+                     src={`https://bwipjs-api.metafloor.com/?bcid=code128&text=${invoice.va_number}&scale=2&rotate=N&includetext`} 
+                     alt="Barcode Pembayaran"
+                     className="h-16 mx-auto"
+                   />
+                 </div>
+                 <button onClick={handleCopyVa} className="w-full flex items-center justify-center gap-2 text-brand-600 bg-brand-50 py-2 rounded-lg font-bold text-sm">
+                   <Copy size={16} /> Salin Kode
+                 </button>
+               </div>
+             ) : (pmType.includes('e_wallet') || pmType.includes('ewallet') || pmType.includes('e-wallet')) ? (
+               <div className="bg-slate-50 rounded-xl p-6 border border-dashed border-gray-300 relative text-center">
+                 <div className="flex flex-col items-center gap-2 mb-4">
+                   {invoice.payment_method_logo && (
+                     <img 
+                       src={invoice.payment_method_logo} 
+                       alt={invoice.payment_method_name} 
+                       className="h-8 max-w-[100px] object-contain rounded-md mb-1" 
+                     />
+                   )}
+                   <p className="text-xs text-gray-500 font-semibold">Bayar Menggunakan {invoice.payment_method_name}</p>
+                 </div>
+                 {invoice.payment_url ? (
+                   <button 
+                     onClick={triggerSnap}
+                     className="w-full bg-[#6000D3] text-white font-bold py-3.5 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform text-base"
+                     style={{ backgroundColor: invoice.payment_method_code === 'OVO' ? '#6000D3' : '#322E85' }}
+                   >
+                     Bayar Sekarang ({invoice.payment_method_name})
+                   </button>
+                 ) : (
+                   <p className="text-red-500 text-xs">Link pembayaran tidak tersedia.</p>
+                 )}
+                 <p className="text-[10px] text-gray-400 mt-4 italic">*Anda akan diarahkan ke instruksi/modal pembayaran {invoice.payment_method_name}.</p>
+               </div>
+             ) : (pmType.includes('qr') || pmType === 'qr_code') ? (
+                <div className="bg-slate-50 rounded-xl p-6 border border-dashed border-gray-300 relative text-center">
+                  <div className="flex flex-col items-center gap-2 mb-4">
+                    {invoice.payment_method_logo && (
+                      <img 
+                        src={invoice.payment_method_logo} 
+                        alt={invoice.payment_method_name} 
+                        className="h-8 max-w-[100px] object-contain rounded-md mb-1" 
+                      />
+                    )}
+                    <p className="text-xs text-gray-500 font-semibold">Scan QR Code / Bayar Sekarang</p>
+                  </div>
+                  {parsedUrl?.qr_string ? (
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 inline-block mb-3">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(parsedUrl.qr_string)}`} 
+                        alt="QR Code Pembayaran"
+                        className="w-48 h-48 mx-auto"
+                      />
+                    </div>
+                  ) : invoice.payment_url ? (
+                    <button 
+                      onClick={triggerSnap}
+                      className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-transform text-base mb-2"
+                    >
+                      Buka Modal Pembayaran QRIS / Midtrans
+                    </button>
+                  ) : <p className="text-red-500 text-xs">QR Code tidak tersedia.</p>}
+                  <p className="text-[10px] text-gray-400 mt-2 italic">*Bisa di-scan menggunakan DANA, OVO, GoPay, ShopeePay, atau LinkAja.</p>
+                </div>
+             ) : null;
+            })()}
+        </div>
+
+        {/* Upload Proof Area (Only for Manual Transfer) */}
+        {isManual && (
+          <div className="bg-white border text-center border-gray-100 rounded-2xl p-6 shadow-sm mb-6">
+            <h3 className="font-bold text-gray-800 mb-2">Unggah Bukti Transfer</h3>
+            <p className="text-gray-500 text-[11px] mb-4">Pastikan nominal dan nomor rekening tujuan terlihat jelas.</p>
+            
+            <input 
+              type="file" 
+              accept="image/*" 
+              className="hidden" 
+              ref={fileInputRef} 
+              onChange={handleFileChange} 
+            />
+
+            {!previewUrl ? (
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-brand-200 bg-brand-50/50 hover:bg-brand-50 transition-colors rounded-xl p-8"
+              >
+                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
+                  <Upload className="text-brand-500" size={24} />
+                </div>
+                <span className="font-semibold text-sm text-brand-700">Pilih Foto Bukti Transfer</span>
+              </button>
+            ) : (
+              <div className="w-full border border-gray-200 rounded-xl overflow-hidden relative group">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={previewUrl} alt="Preview Bukti" className="w-full aspect-[4/3] object-cover" />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                  <button onClick={() => fileInputRef.current?.click()} className="bg-white/90 text-gray-800 p-2 rounded-full hover:bg-white transition-colors" title="Ubah Foto">
+                    <RefreshCcw size={20} />
+                  </button>
+                </div>
+                <div className="bg-brand-50 border-t border-gray-100 p-3 flex justify-between items-center">
+                  <div className="flex items-center gap-2 text-brand-700 text-xs font-semibold">
+                    <CheckCircle size={14} className="text-brand-500" /> Foto siap diunggah
+                  </div>
+                  <button onClick={handleClearFile} className="text-gray-500 hover:text-red-500 text-xs font-medium">Batal</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-between items-center mb-4 px-1">
+          <h3 className="font-bold text-gray-800 text-lg">Cara Pembayaran</h3>
+          <button onClick={handleDownloadPDF} disabled={isDownloadingPdf} className="flex items-center gap-1.5 text-brand-600 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
+            {isDownloadingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            Download PDF
+          </button>
+        </div>
+        
+        <div className="flex flex-col gap-3 mb-2">
+          {invoice.instructions?.map((inst: any, idx: number) => (
+            <details key={idx} className="group bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden" open={idx === 0}>
+              <summary className="font-bold text-sm text-gray-800 p-4 cursor-pointer list-none flex justify-between items-center bg-gray-50/50 hover:bg-gray-50 transition-colors select-none">
+                <span className="flex items-center gap-2.5">
+                  <span className="w-6 h-6 bg-brand-500 text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">{idx + 1}</span>
+                  {inst.title}
+                </span>
+                <ChevronDown size={18} className="text-gray-400 group-open:rotate-180 transition-transform shrink-0 ml-2" />
+              </summary>
+              <div className="p-4 border-t border-gray-100 bg-white text-sm text-gray-700 leading-relaxed [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:mb-2 [&_strong]:font-bold [&_strong]:text-gray-900" dangerouslySetInnerHTML={{ __html: inst.content }}></div>
+            </details>
+          ))}
+        </div>
+      </div>
+
+      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white p-4 border-t border-gray-100 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] pb-safe z-20">
+        <button 
+          onClick={handleConfirmSubmit}
+          disabled={isUploading || (isManual && !selectedFile && !invoice?.proof_transfer)}
+          className={`w-full flex justify-center items-center gap-2 text-center text-white font-bold text-lg py-4 rounded-xl shadow-lg transition-transform block ${isUploading || (isManual && !selectedFile && !invoice?.proof_transfer) ? 'bg-gray-300 shadow-none cursor-not-allowed' : 'bg-brand-600 shadow-brand-600/20 active:scale-[0.98]'}`}
+        >
+          {isUploading ? (
+            <><Loader2 className="animate-spin" size={20} /> Memproses...</>
+          ) : isManual && !selectedFile && !invoice?.proof_transfer ? 'Pilih Foto Dahulu' : isManual && invoice?.proof_transfer && !selectedFile ? 'Kembali ke Beranda' : isManual && selectedFile ? 'Unggah Bukti' : 'Saya Sudah Bayar'}
+        </button>
+      </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in zoom-in-95">
+            <h3 className="font-bold text-xl text-gray-800 mb-2 text-center">Konfirmasi Unggah</h3>
+            <p className="text-gray-600 text-sm text-center mb-6">
+              Apakah Anda yakin ingin mengirim bukti transfer ini? Pastikan gambar terlihat jelas dan sesuai dengan nominal tagihan.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors"
+              >
+                Batal
+              </button>
+              <button 
+                onClick={executeSubmit}
+                className="flex-1 py-3 px-4 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center"
+              >
+                Yakin, Unggah
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden PDF Template - Rendered off-screen, captured by html-to-image */}
+      <div style={{ position: 'absolute', top: '-9999px', left: '-9999px', zIndex: -1, pointerEvents: 'none' }}>
+        <div id="pdf-template" style={{ width: '794px', background: 'white', color: '#1a1a1a', padding: '48px', fontFamily: 'Arial, sans-serif', fontSize: '13px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #e5e7eb', paddingBottom: '20px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {invoice.ngoLogo ? (
+                <img 
+                  src={invoice.ngoLogo} 
+                  alt={invoice.ngoName || 'Lembaga'} 
+                  style={{ height: '48px', objectFit: 'contain' }} 
+                />
+              ) : (
+                <div style={{ width: '48px', height: '48px', background: '#0d9488', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '20px' }}>L</div>
+              )}
+              <span style={{ fontWeight: '800', fontSize: '20px', color: '#0f766e' }}>{invoice.ngoName || 'Lembaga Kami'}</span>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontWeight: '700', fontSize: '15px' }}>ID Donasi : {invoice.invoice_code}</p>
+              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>Created: {invoice.created_at ? new Date(invoice.created_at).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) : '-'}</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+            {invoice.payment_method_logo && (
+              <img 
+                src={invoice.payment_method_logo} 
+                alt={invoice.payment_method_name} 
+                style={{ height: '32px', objectFit: 'contain', borderRadius: '4px' }} 
+              />
+            )}
+            <p style={{ fontWeight: '900', fontSize: '20px', fontStyle: 'italic', margin: 0 }}>{invoice.payment_method_name}</p>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '1px solid #e5e7eb', paddingBottom: '20px', marginBottom: '20px' }}>
+            <div>
+              <p style={{ fontSize: '13px', color: '#4b5563' }}>Dear <strong>{invoice.donor_name}</strong>,</p>
+              <p style={{ fontSize: '13px', color: '#4b5563' }}>Silakan Selesaikan Donasi Anda :</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <p style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px' }}>Total Donasi</p>
+              <p style={{ fontWeight: '900', fontSize: '28px' }}>{formatIDR(Number(invoice.total_amount))}</p>
+            </div>
+          </div>
+          <p style={{ fontWeight: '700', fontSize: '15px', marginBottom: '12px' }}>Rincian Donasi</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '8px', fontSize: '13px', marginBottom: '20px' }}>
+            <div style={{ color: '#6b7280', fontWeight: '600' }}>{isManual ? 'Nomor Rekening' : invoice.payment_method_type?.includes('qr') ? 'QRIS String' : 'Kode Pembayaran'}</div>
+            <div style={{ fontWeight: '700' }}>{displayVa} {isManual && displayName ? `(a/n ${displayName})` : ''}</div>
+            <div style={{ color: '#6b7280', fontWeight: '600' }}>Batas Pembayaran</div>
+            <div>{expireDateStr || (invoice.created_at ? new Date(new Date(invoice.created_at).getTime() + 6*60*60*1000).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) : '-')}</div>
+          </div>
+
+          {/* QR Code in PDF if applicable */}
+          {(invoice.payment_method_type?.includes('qr')) && (
+            <div style={{ textAlign: 'center', marginBottom: '24px', padding: '16px', background: '#f9fafb', borderRadius: '12px', border: '1px solid #e5e7eb' }}>
+              <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '12px', fontWeight: '700' }}>SCAN QRIS DI BAWAH INI</p>
+              {(() => {
+                let qrString = '';
+                try {
+                  const urlData = JSON.parse(invoice.payment_url || '{}');
+                  qrString = urlData.qr_string || '';
+                } catch (e) {
+                  qrString = invoice.payment_url || '';
+                }
+                return qrString ? (
+                  <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrString)}`} 
+                    alt="QR Code"
+                    style={{ width: '180px', height: '180px', margin: '0 auto' }}
+                  />
+                ) : null;
+              })()}
+              <p style={{ fontSize: '10px', color: '#9ca3af', marginTop: '12px' }}>Dapat di-scan menggunakan DANA, OVO, GoPay, ShopeePay, atau LinkAja.</p>
+            </div>
+          )}
+          <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse', marginBottom: '20px' }}>
+            <thead>
+              <tr style={{ background: '#f3f4f6' }}>
+                <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: '700', color: '#6b7280' }}>Deskripsi</th>
+                <th style={{ textAlign: 'right', padding: '8px 12px', fontWeight: '700', color: '#6b7280' }}>Nominal Donasi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoice.lineItems?.length > 0 ? (
+                invoice.lineItems.map((item: any, idx: number) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '8px 12px' }}>{item.title || item.variant_name} (x{item.qty})</td>
+                    <td style={{ textAlign: 'right', padding: '8px 12px' }}>{formatIDR(Number(item.amount))}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '8px 12px' }}>Donasi</td>
+                  <td style={{ textAlign: 'right', padding: '8px 12px' }}>{formatIDR(Number(invoice.base_amount || invoice.total_amount))}</td>
+                </tr>
+              )}
+              {Number(invoice.admin_fee) > 0 && (
+                <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                  <td style={{ padding: '8px 12px' }}>Biaya Admin</td>
+                  <td style={{ textAlign: 'right', padding: '8px 12px' }}>{formatIDR(Number(invoice.admin_fee))}</td>
+                </tr>
+              )}
+              <tr style={{ fontWeight: '700', background: '#f9fafb' }}>
+                <td style={{ padding: '10px 12px' }}>TOTAL</td>
+                <td style={{ textAlign: 'right', padding: '10px 12px' }}>{formatIDR(Number(invoice.total_amount))}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style={{ marginBottom: '28px', padding: '12px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px' }}>
+            <p style={{ fontWeight: '700', marginBottom: '4px' }}>PERHATIAN!</p>
+            <p style={{ fontSize: '12px', color: '#4b5563', lineHeight: '1.6' }}>Mohon selesaikan pembayaran donasi Anda sebelum {expireDateStr || (invoice.created_at ? new Date(new Date(invoice.created_at).getTime() + 6*60*60*1000).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) : '-')}. Apabila melewati batas waktu, donasi Anda akan otomatis dibatalkan.</p>
+          </div>
+
+          {/* Manual transfer unique code box in PDF */}
+          {isManual && invoice.total_amount && (() => {
+            const amtStr = Number(invoice.total_amount).toString();
+            const last3 = amtStr.length >= 3 ? amtStr.slice(-3) : amtStr;
+            const rest = amtStr.length >= 3 ? amtStr.slice(0, -3) : '';
+            const formattedRest = rest ? formatIDR(Number(rest)) : 'Rp ';
+            return (
+              <div style={{ marginBottom: '24px', padding: '12px 16px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <div>
+                  <p style={{ fontWeight: '700', fontSize: '13px', marginBottom: '4px', color: '#c2410c' }}>⚠ Pastikan Transfer Sesuai Nominal Termasuk 3 Digit Terakhir</p>
+                  <p style={{ fontSize: '12px', color: '#4b5563', marginBottom: '4px' }}>Nominal yang harus ditransfer (termasuk kode unik):</p>
+                  <p style={{ fontWeight: '900', fontSize: '20px', color: '#1a1a1a', letterSpacing: '1px' }}>
+                    {formattedRest.replace(',00', '')}.<span style={{ background: '#fbbf24', padding: '2px 4px', borderRadius: '4px' }}>{last3}</span>
+                  </p>
+                  <p style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px', fontStyle: 'italic' }}>* 3 angka terakhir ({last3}) adalah kode unik yang membantu kami mengidentifikasi pembayaran Anda secara otomatis.</p>
+                </div>
+              </div>
+            );
+          })()}
+          {invoice.instructions?.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', fontSize: '12px' }}>
+              {invoice.instructions.map((inst: any, idx: number) => (
+                <div key={idx}>
+                  <p style={{ fontWeight: '700', marginBottom: '8px', fontSize: '13px' }}>{inst.title}</p>
+                  <div
+                    style={{ color: '#4b5563', lineHeight: '1.8' }}
+                    dangerouslySetInnerHTML={{
+                      __html: inst.content
+                        .replace(/<ol[^>]*>/gi, '<ol style="margin:0;padding-left:18px;list-style-type:decimal">')
+                        .replace(/<ul[^>]*>/gi, '<ul style="margin:0;padding-left:18px;list-style-type:disc">')
+                        .replace(/<li[^>]*>/gi, '<li style="margin-bottom:4px">')
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+

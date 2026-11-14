@@ -1,0 +1,551 @@
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import {
+  LayoutDashboard, Megaphone, Receipt, Users, Settings,
+  Menu, LogOut, Heart, Tags, CreditCard, BellRing,
+  ShieldCheck, History, Wallet, MessageSquare, User,
+  Globe, FileText, BarChart2, PieChart, Users2, Shield,
+  Building, HelpCircle, Star, Activity, FileCheck, BookOpen, Info, HeartHandshake,
+  Send, Truck, Repeat, MapPin, ClipboardCheck,
+  Landmark, Lock, FileBarChart, IdCard, Folder, Mail,
+  Hash, FileSpreadsheet, Building2, BadgeCheck, Calculator,
+  Briefcase, Calendar, Book, BookText, Scale, CalendarCheck, ListChecks,
+  ChevronDown, ChevronRight, Contact, ClipboardList, List
+} from 'lucide-react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+import useSWR from 'swr';
+import { useSession, signOut } from 'next-auth/react';
+import Image from 'next/image';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+// FINS / Penyaluran / HCM / Document module menus — grouped into collapsible
+// accordion categories (unlike crowdfund/website, which stay flat lists) so
+// the ~30 combined items don't push the sidebar into an endless scroll.
+// Mirrors the prototype's src/components/Sidebar.jsx MODULE_GROUPS.
+type AccordionItem = { icon: any; label: string; href: string };
+type AccordionGroup = { category: string; items: AccordionItem[] };
+
+const finsMenus: AccordionGroup[] = [
+  {
+    category: 'Home', items: [
+      { icon: LayoutDashboard, label: 'Dashboard Cash Bank', href: '/fins/dashboard-cash-bank' },
+      { icon: FileText, label: 'Pengajuan CA', href: '/fins/pengajuan-ca' },
+      { icon: Send, label: 'Pencairan', href: '/fins/pencairan' },
+      { icon: ClipboardCheck, label: 'Pertanggungjawaban CA', href: '/fins/pertanggungjawaban-ca' },
+      { icon: Receipt, label: 'Pengeluaran', href: '/fins/pengeluaran' },
+      { icon: Wallet, label: 'Penerimaan', href: '/fins/penerimaan' },
+      { icon: BookOpen, label: 'Buku Harian', href: '/fins/buku-harian' },
+      { icon: Lock, label: 'Penutupan', href: '/fins/penutupan' },
+      { icon: FileBarChart, label: 'Resume Dana Pengelola', href: '/fins/resume-dana-pengelola' },
+    ]
+  },
+  {
+    category: 'Akuntansi', items: [
+      { icon: Landmark, label: 'Saldo Awal', href: '/fins/saldo-awal' },
+      { icon: BookText, label: 'Rekap Jurnal', href: '/fins/rekap-jurnal' },
+      { icon: Book, label: 'Buku Besar', href: '/fins/buku-besar' },
+      { icon: Scale, label: 'Trial Balance', href: '/fins/trial-balance' },
+    ]
+  },
+  {
+    category: 'Laporan', items: [
+      { icon: BarChart2, label: 'Laporan Keuangan', href: '/fins/laporan-keuangan' },
+      { icon: Calendar, label: 'Laporan Bulanan', href: '/fins/laporan-bulanan' },
+    ]
+  },
+  {
+    category: 'Aset', items: [
+      { icon: Building2, label: 'Entry Aset', href: '/fins/aset/baru' },
+      { icon: FileSpreadsheet, label: 'List Aset', href: '/fins/aset' },
+    ]
+  },
+];
+
+const configurationMenus: AccordionGroup[] = [
+  {
+    category: 'Master Setup', items: [
+      { icon: Briefcase, label: 'Profile Lembaga', href: '/fins/profile-lembaga' },
+      { icon: Settings, label: 'Program', href: '/fins/program' },
+      { icon: Hash, label: 'Kode Bank', href: '/fins/kode-bank' },
+      { icon: CreditCard, label: 'Rekening Bank', href: '/fins/rekening-bank' },
+      { icon: FileSpreadsheet, label: 'Chart of Accounts', href: '/fins/coa' },
+      { icon: Building2, label: 'COA Kantor', href: '/fins/coa-kantor' },
+      { icon: Wallet, label: 'Saldo Dana', href: '/fins/saldo-dana' },
+      { icon: BadgeCheck, label: 'Level Approve', href: '/fins/level-approve' },
+      { icon: Calculator, label: 'Rumus Report', href: '/fins/rumus-report' },
+    ]
+  },
+];
+
+const penyaluranMenus: AccordionGroup[] = [
+  {
+    category: 'Operasional', items: [
+      { icon: LayoutDashboard, label: 'Dashboard', href: '/penyaluran/dashboard' },
+      { icon: MapPin, label: 'Peta Penyaluran', href: '/penyaluran/peta' },
+      { icon: Send, label: 'Pengajuan Penyaluran', href: '/penyaluran/pengajuan' },
+      { icon: ClipboardList, label: 'Entry Penyaluran', href: '/penyaluran/entry' },
+      { icon: List, label: 'List Penyaluran', href: '/penyaluran/daftar' },
+      { icon: BadgeCheck, label: 'Verifikasi PM', href: '/penyaluran/verifikasi' },
+      { icon: Users, label: 'Penerima Manfaat', href: '/penyaluran/penerima-manfaat' },
+      { icon: Heart, label: 'List Qurban', href: '/penyaluran/qurban' },
+      { icon: Repeat, label: 'Distribusi Massal', href: '/penyaluran/distribusi-massal' },
+    ]
+  },
+  {
+    category: 'Pertanggungjawaban', items: [
+      { icon: ClipboardCheck, label: 'Pertanggungjawaban', href: '/penyaluran/pertanggungjawaban' },
+    ]
+  },
+  {
+    category: 'Laporan', items: [
+      { icon: BarChart2, label: 'Laporan Penyaluran', href: '/penyaluran/laporan' },
+    ]
+  },
+];
+
+const crmMenus: AccordionGroup[] = [
+  {
+    category: 'Donatur', items: [
+      { icon: Users, label: 'Data Donatur', href: '/crm/donors' },
+      { icon: Calendar, label: 'Jadwal Rutin', href: '/crm/routines' },
+      { icon: BadgeCheck, label: 'Verifikasi Donatur', href: '/crm/verifikasi' },
+    ]
+  },
+  {
+    category: 'Transaksi', items: [
+      { icon: Receipt, label: 'List Transaksi', href: '/panel/transactions' },
+      { icon: FileCheck, label: 'Bukti Setor', href: '/crm/bukti-setor' },
+      { icon: Repeat, label: 'LPS Rutin', href: '/crm/lps' },
+      { icon: Landmark, label: 'FINS Sync', href: '/crm/fins-sync' },
+      { icon: Heart, label: 'List Transaksi Qurban', href: '/penyaluran/qurban' },
+    ]
+  },
+  {
+    category: 'Report Management', items: [
+      { icon: PieChart, label: 'Analisa Donatur', href: '/crm/analisa-donatur' },
+      { icon: BarChart2, label: 'Analisa Transaksi', href: '/crm/analisa-transaksi' },
+      { icon: Activity, label: 'Transaksi Funnel', href: '/crm/funnel' },
+      { icon: Truck, label: 'Analisis Salur', href: '/crm/analisis-salur' },
+      { icon: Users2, label: 'Analisis PM', href: '/crm/analisis-pm' },
+      { icon: Scale, label: 'Himpun vs Salur', href: '/crm/himpun-vs-salur' },
+      { icon: LayoutDashboard, label: 'Dashboard Penghimpunan', href: '/crm/dashboard' },
+    ]
+  },
+];
+
+function itemIsActive(pathname: string, href: string) {
+  const path = href.split('?')[0];
+  if (path.endsWith('/coming-soon')) return false;
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+const hcmMenus: AccordionGroup[] = [
+  {
+    category: 'Kepegawaian', items: [
+      { icon: Users, label: 'Data Karyawan', href: '/fins/coming-soon?title=Data+Karyawan' },
+    ]
+  },
+  {
+    category: 'Presensi', items: [
+      { icon: CalendarCheck, label: 'Kehadiran Karyawan', href: '/fins/coming-soon?title=Kehadiran+Karyawan' },
+    ]
+  },
+  {
+    category: 'Produktivitas', items: [
+      { icon: ListChecks, label: 'Aktivitas Harian', href: '/fins/coming-soon?title=Aktivitas+Harian' },
+    ]
+  },
+];
+
+const documentMenus: AccordionGroup[] = [
+  {
+    category: 'Kearsipan', items: [
+      { icon: FileText, label: 'Daftar Dokumen', href: '/fins/coming-soon?title=Daftar+Dokumen' },
+      { icon: Mail, label: 'Surat Menyurat', href: '/fins/coming-soon?title=Surat+Menyurat' },
+    ]
+  },
+];
+
+type AdminModule = 'crowdfund' | 'website' | 'tutorial' | 'penyaluran' | 'crm' | 'fins' | 'hcm' | 'document' | 'configuration';
+
+const MODULE_LABEL: Record<AdminModule, string> = {
+  crowdfund: 'Crowdfunding',
+  website: 'Website CMS',
+  tutorial: 'Tutorial',
+  penyaluran: 'Penyaluran',
+  crm: 'CRM',
+  fins: 'FINS',
+  hcm: 'HCM',
+  document: 'Document',
+  configuration: 'Configuration',
+};
+
+const MODULE_ACCENT: Record<string, { bg: string; text: string; border?: string }> = {
+  penyaluran: { bg: 'bg-sky-500/10', text: 'text-sky-400' },
+  crm: { bg: 'bg-fuchsia-500/10', text: 'text-fuchsia-400' },
+  fins: { bg: 'bg-amber-500/10', text: 'text-amber-400' },
+  hcm: { bg: 'bg-rose-500/10', text: 'text-rose-400' },
+  document: { bg: 'bg-emerald-500/10', text: 'text-emerald-400' },
+  configuration: { bg: 'bg-cyan-500/10', text: 'text-cyan-400' },
+};
+
+// Crowdfunding Module Menus
+const crowdfundMenus = [
+  { group: null, items: [{ icon: LayoutDashboard, label: 'Dashboard', href: '/panel/dashboard' }] },
+  {
+    group: 'MANAJEMEN', items: [
+      { icon: Megaphone, label: 'Kampanye', href: '/panel/campaigns' },
+      { icon: MessageSquare, label: 'Kabar Penyaluran', href: '/panel/campaign-updates' },
+      { icon: Tags, label: 'Kategori', href: '/panel/categories' },
+      { icon: Receipt, label: 'Transaksi', href: '/panel/transactions' },
+      { icon: Users, label: 'Donatur', href: '/panel/donors' },
+      { icon: Heart, label: 'Afiliasi', href: '/panel/affiliates' },
+      { icon: Wallet, label: 'Penarikan', href: '/panel/withdrawals' },
+    ]
+  },
+  {
+    group: 'SISTEM', items: [
+      { icon: BellRing, label: 'Notifikasi', href: '/panel/notifications' },
+      { icon: ShieldCheck, label: 'Admin', href: '/panel/admins' },
+      { icon: CreditCard, label: 'Payment Channels', href: '/panel/payment-channels' },
+      { icon: History, label: 'Log Sistem', href: '/panel/logs' },
+      { icon: Settings, label: 'Pengaturan', href: '/panel/settings' },
+    ]
+  }
+];
+
+// Website (CMS) Module Menus
+const websiteMenus = [
+  {
+    group: 'KONTEN', items: [
+      { icon: FileText, label: 'Artikel', href: '/panel/web-articles' },
+      { icon: Tags, label: 'Kategori Artikel', href: '/panel/web-article-categories' },
+      { icon: MessageSquare, label: 'Testimoni', href: '/panel/web-testimonials' },
+      { icon: Users2, label: 'Mitra', href: '/panel/web-partners' },
+      { icon: HeartHandshake, label: 'Program Peduli', href: '/panel/web-care-categories' },
+    ]
+  },
+  {
+    group: 'TRANSPARANSI', items: [
+      { icon: FileCheck, label: 'Laporan Keuangan', href: '/panel/web-reports' },
+      { icon: BarChart2, label: 'Impact Metrics', href: '/panel/web-metrics' },
+      { icon: MapPin, label: 'Titik Sebaran', href: '/panel/web-distribution-points' },
+      { icon: Heart, label: 'Jejak Kebaikan', href: '/panel/web-impact-categories' },
+    ]
+  },
+  {
+    group: 'ORGANISASI', items: [
+      { icon: Info, label: 'Tentang Kami', href: '/panel/web-about' },
+      { icon: Users, label: 'Tim & Pengurus', href: '/panel/web-team' },
+      { icon: Shield, label: 'Legalitas', href: '/panel/web-legality' },
+      { icon: Building, label: 'Rekening Resmi', href: '/panel/web-banks' },
+    ]
+  },
+  {
+    group: 'LAYANAN', items: [
+      { icon: HelpCircle, label: 'FAQ', href: '/panel/web-faqs' },
+    ]
+  }
+];
+
+// Tutorial Menus — jump links into /tutorial, grouped the same way as the two modules
+const tutorialMenus = [
+  {
+    group: 'WEBSITE CMS', items: [
+      { icon: FileText, label: 'Artikel', href: '/panel/tutorial#web-articles' },
+      { icon: Tags, label: 'Kategori Artikel', href: '/panel/tutorial#web-article-categories' },
+      { icon: MessageSquare, label: 'Testimoni', href: '/panel/tutorial#web-testimonials' },
+      { icon: Users2, label: 'Mitra', href: '/panel/tutorial#web-partners' },
+      { icon: HeartHandshake, label: 'Program Peduli', href: '/panel/tutorial#web-care-categories' },
+      { icon: FileCheck, label: 'Laporan Keuangan', href: '/panel/tutorial#web-reports' },
+      { icon: BarChart2, label: 'Impact Metrics', href: '/panel/tutorial#web-metrics' },
+      { icon: MapPin, label: 'Titik Sebaran', href: '/panel/tutorial#web-distribution-points' },
+      { icon: Heart, label: 'Jejak Kebaikan', href: '/panel/tutorial#web-impact-categories' },
+      { icon: Info, label: 'Tentang Kami', href: '/panel/tutorial#web-about' },
+      { icon: Users, label: 'Tim & Pengurus', href: '/panel/tutorial#web-team' },
+      { icon: Shield, label: 'Legalitas', href: '/panel/tutorial#web-legality' },
+      { icon: Building, label: 'Rekening Resmi', href: '/panel/tutorial#web-banks' },
+      { icon: HelpCircle, label: 'FAQ', href: '/panel/tutorial#web-faqs' },
+    ]
+  },
+  {
+    group: 'CROWDFUNDING', items: [
+      { icon: LayoutDashboard, label: 'Dashboard', href: '/panel/tutorial#dashboard' },
+      { icon: Megaphone, label: 'Kampanye', href: '/panel/tutorial#campaigns' },
+      { icon: MessageSquare, label: 'Kabar Penyaluran', href: '/panel/tutorial#campaign-updates' },
+      { icon: Tags, label: 'Kategori', href: '/panel/tutorial#categories' },
+      { icon: Receipt, label: 'Transaksi', href: '/panel/tutorial#transactions' },
+      { icon: Users, label: 'Donatur', href: '/panel/tutorial#donors' },
+      { icon: Heart, label: 'Afiliasi', href: '/panel/tutorial#affiliates' },
+      { icon: Wallet, label: 'Penarikan', href: '/panel/tutorial#withdrawals' },
+      { icon: BellRing, label: 'Notifikasi', href: '/panel/tutorial#notifications' },
+      { icon: ShieldCheck, label: 'Admin', href: '/panel/tutorial#admins' },
+      { icon: CreditCard, label: 'Payment Channels', href: '/panel/tutorial#payment-channels' },
+      { icon: History, label: 'Log Sistem', href: '/panel/tutorial#logs' },
+      { icon: Settings, label: 'Pengaturan', href: '/panel/tutorial#settings' },
+    ]
+  },
+];
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
+export default function Sidebar({ isOpen, toggle }: { isOpen: boolean, toggle: () => void }) {
+  const pathname = usePathname();
+  const { data: config } = useSWR('/api/panel/ngo-config', fetcher);
+  const { data: session } = useSession();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [activeModule, setActiveModule] = useState<AdminModule>('crowdfund');
+  const ACCORDION_MODULES = new Set(['penyaluran', 'crm', 'fins', 'hcm', 'document', 'configuration']);
+  const ACCORDION_GROUPS: Record<string, AccordionGroup[]> = {
+    penyaluran: penyaluranMenus, crm: crmMenus, fins: finsMenus, hcm: hcmMenus, document: documentMenus, configuration: configurationMenus,
+  };
+  const [openGroup, setOpenGroup] = useState<Record<string, string | null>>(() => {
+    const initial: Record<string, string | null> = {};
+    Object.entries(ACCORDION_GROUPS).forEach(([mod, groups]) => { initial[mod] = groups[0]?.category ?? null; });
+    return initial;
+  });
+
+  // Load active module from local storage on mount
+  useEffect(() => {
+    const savedModule = localStorage.getItem('active_admin_module');
+    if (['crowdfund', 'website', 'tutorial', 'penyaluran', 'crm', 'fins', 'hcm', 'document', 'configuration'].includes(savedModule || '')) {
+      setActiveModule(savedModule as AdminModule);
+    }
+  }, []);
+
+  // Open the rail that owns the current URL. Manual rail clicks still stick until the path changes.
+  useEffect(() => {
+    let mod: AdminModule | null = null;
+    if (pathname.startsWith('/crm')) mod = 'crm';
+    else if (pathname.startsWith('/penyaluran')) mod = 'penyaluran';
+    else if (pathname.startsWith('/fins/profile-lembaga') || pathname.startsWith('/fins/program') || pathname.startsWith('/fins/rumus-report')) mod = 'configuration';
+    else if (pathname.startsWith('/fins')) mod = 'fins';
+    else if (pathname === '/panel/tutorial') mod = 'tutorial';
+    if (mod) {
+      setActiveModule(mod);
+      localStorage.setItem('active_admin_module', mod);
+    }
+  }, [pathname]);
+
+  const handleModuleChange = (mod: AdminModule) => {
+    setActiveModule(mod);
+    localStorage.setItem('active_admin_module', mod);
+  };
+
+  const toggleGroup = (moduleKey: string, category: string) => {
+    setOpenGroup(prev => ({ ...prev, [moduleKey]: prev[moduleKey] === category ? null : category }));
+  };
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    await signOut({ callbackUrl: '/panel/login' });
+  };
+
+  const userName = session?.user?.name ?? 'Admin';
+  const userRole = session?.user?.role ?? '';
+  const userImage = session?.user?.image;
+
+  const currentMenus = activeModule === 'crowdfund' ? crowdfundMenus : activeModule === 'website' ? websiteMenus : tutorialMenus;
+  const isWebsite = activeModule === 'website';
+  const isTutorial = activeModule === 'tutorial';
+  const isCrowdfund = activeModule === 'crowdfund';
+
+  return (
+    <aside className="h-full flex flex-shrink-0 z-50">
+
+      {/* Primary Rail */}
+      <div className="w-[72px] h-full bg-[#0b1120] flex flex-col items-center py-4 border-r border-slate-800">
+        <div className="mb-6">
+          <div className="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center shadow-lg">
+            <Heart size={20} className="text-white fill-white/20" />
+          </div>
+        </div>
+
+        <div className="flex-1 flex flex-col gap-2 w-full px-2 overflow-y-auto">
+          <button
+            onClick={() => handleModuleChange('crowdfund')}
+            title="Crowdfunding"
+            className={cn(
+              "flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all",
+              isCrowdfund ? "bg-teal-500/20 text-teal-400" : "text-slate-500 hover:text-slate-300 hover:bg-slate-800"
+            )}
+          >
+            <LayoutDashboard size={22} strokeWidth={isCrowdfund ? 2.5 : 2} />
+            <span className="text-[9px] font-bold tracking-tight">CROWDFUND</span>
+          </button>
+
+          <button
+            onClick={() => handleModuleChange('website')}
+            title="Website CMS"
+            className={cn(
+              "flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all",
+              isWebsite ? "bg-indigo-500/20 text-indigo-400" : "text-slate-500 hover:text-slate-300 hover:bg-slate-800"
+            )}
+          >
+            <Globe size={22} strokeWidth={isWebsite ? 2.5 : 2} />
+            <span className="text-[9px] font-bold tracking-tight">WEBSITE</span>
+          </button>
+
+          <div className="w-full h-px bg-slate-800 my-1" />
+
+          <Link
+            href="/panel/tutorial"
+            onClick={() => handleModuleChange('tutorial')}
+            title="Tutorial"
+            className={cn(
+              "flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all",
+              isTutorial ? "bg-violet-500/20 text-violet-400" : "text-slate-500 hover:text-slate-300 hover:bg-slate-800"
+            )}
+          >
+            <BookOpen size={22} strokeWidth={isTutorial ? 2.5 : 2} />
+            <span className="text-[9px] font-bold tracking-tight">TUTORIAL</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Secondary Sidebar (Sub-menu) */}
+      <div
+        className={cn(
+          "h-full bg-slate-900 transition-all duration-300 flex flex-col border-r border-slate-800",
+          isOpen ? "w-60" : "w-0 overflow-hidden border-r-0"
+        )}
+      >
+        <div className="h-16 flex items-center px-6 border-b border-slate-800/80 shrink-0">
+          <h2 className="text-slate-200 font-bold tracking-tight">{MODULE_LABEL[activeModule]}</h2>
+        </div>
+
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-4 custom-scrollbar">
+          {ACCORDION_MODULES.has(activeModule) ? (
+            (() => {
+              const accent = MODULE_ACCENT[activeModule];
+              return ACCORDION_GROUPS[activeModule].map(group => {
+                const isGroupOpen = openGroup[activeModule] === group.category;
+                return (
+                  <div key={group.category}>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(activeModule, group.category)}
+                      className="w-full flex items-center justify-between px-3 mb-1 py-1.5 text-[10px] font-bold text-slate-500 tracking-wider hover:text-slate-300 transition-colors"
+                    >
+                      <span>{group.category.toUpperCase()}</span>
+                      <ChevronDown size={13} className={cn("transition-transform", isGroupOpen && "rotate-180")} />
+                    </button>
+                    {isGroupOpen && (
+                      <div className="space-y-1 mb-2">
+                        {group.items.map(item => {
+                          const isActive = itemIsActive(pathname, item.href);
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              className={cn(
+                                "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group",
+                                isActive ? cn(accent.bg, accent.text) : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                              )}
+                            >
+                              <item.icon size={18} className={cn(isActive ? accent.text : "text-slate-500 group-hover:text-slate-300")} />
+                              <span className={cn("font-medium text-sm truncate", isActive && "font-bold")}>{item.label}</span>
+                              {isActive && <ChevronRight size={14} className="ml-auto shrink-0" />}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              });
+            })()
+          ) : (
+            currentMenus.map((menuGroup: any, idx: number) => (
+              <div key={idx}>
+                {menuGroup.group && (
+                  <div className="px-3 mb-2 text-[10px] font-bold text-slate-500 tracking-wider">
+                    {menuGroup.group}
+                  </div>
+                )}
+                <div className="space-y-1">
+                  {menuGroup.items.map((item: any) => {
+                    const isActive = pathname.startsWith(item.href);
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group",
+                          isActive
+                            ? (isTutorial ? "bg-violet-500/10 text-violet-400" : isWebsite ? "bg-indigo-500/10 text-indigo-400" : "bg-teal-500/10 text-teal-400")
+                            : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                        )}
+                      >
+                        <item.icon size={18} className={cn(
+                          isActive ? (isTutorial ? "text-violet-400" : isWebsite ? "text-indigo-400" : "text-teal-400") : "text-slate-500 group-hover:text-slate-300"
+                        )} />
+                        <span className={cn(
+                          "font-medium text-sm truncate",
+                          isActive && "font-bold"
+                        )}>{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* User Card & Logout */}
+        <div className="p-3 border-t border-slate-800 shrink-0 space-y-1">
+          <div className="flex items-center gap-3 px-3 py-2.5 mb-2 rounded-xl bg-slate-800/50">
+            <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center overflow-hidden shrink-0">
+              {userImage ? (
+                <Image src={userImage} alt={userName} width={32} height={32} className="w-full h-full object-cover" />
+              ) : (
+                <User size={16} className="text-slate-400" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-200 truncate leading-none mb-0.5">{userName}</p>
+              <p className="text-[10px] text-slate-500 capitalize truncate">{userRole.toLowerCase()}</p>
+            </div>
+          </div>
+
+          <button
+            onClick={toggle}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800/80 transition-all group text-slate-400"
+          >
+            <Menu size={18} />
+            <span className="text-sm font-medium">Collapse Menu</span>
+          </button>
+
+          <button
+            id="btn-sidebar-logout"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-rose-500/10 transition-all group disabled:opacity-60 disabled:cursor-not-allowed text-slate-400 hover:text-rose-400"
+          >
+            <LogOut size={18} />
+            <span className="text-sm font-medium">
+              {isLoggingOut ? 'Keluar...' : 'Keluar'}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Global styles for custom scrollbar in sidebar */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: #475569; }
+      `}} />
+    </aside>
+  );
+}
