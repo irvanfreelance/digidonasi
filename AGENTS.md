@@ -1,34 +1,23 @@
 # AGENTS.md
 
-Berlaku untuk repo ini. Paket terpasang sampai hari 4 bila PR ini digabung. Hari 5 belum dimulai.
+Berlaku untuk repo `digidonasi`.
 
-## Yang sudah ditutup
+## Arsitektur & Cakupan
 
-- Satu klien, satu repo, satu basis, satu env. Tidak ada pengalih tenant.
-- `WEBSITE_ENABLED` hanya env server. Persis `true` menyalakan website. Nilai lain mematikan rute, API, dan menu website tanpa menghapus baris.
-- Peran panel hanya `SUPERADMIN` dan `WEBSITE_EDITOR`. Donatur dan afiliasi adalah tabel serta sesi terpisah. Email yang sama boleh punya baris admin dan donatur.
-- Xendit dan Midtrans menyusul hari 4. Faspay hanya baris placeholder tidak aktif.
-- Tidak ada CRM, payroll, FINS, atau modul penyaluran. Kabar dan alokasi adalah konten.
-- Tidak ada deploy, preview Vercel, atau provisioning dari repo ini.
+- **Satu repo, satu aplikasi, white-label:** Menggabungkan crowdfunding publik, login donatur, portal afiliasi, panel admin (`/panel`), dan website lembaga opsional (`WEBSITE_ENABLED=true`).
+- **Tanpa modul internal:** Tidak ada CRM, payroll, FINS, atau modul penyaluran.
+- **Tanpa tabel partisi:** Semua tabel (`invoices`, `transactions`, `transaction_qurban_names`, dll.) menggunakan tabel tunggal tanpa partisi.
+- **`WEBSITE_ENABLED`:** Env server. Nilai persis `'true'` mengaktifkan website lembaga (homepage `/` ke website, rute `/tentang-kami`, `/layanan-ziswaf`, `/transparansi`, `/kontak`, `/program`, `/kabar-kebaikan`, `/news`, serta menu Website di `/panel`). Nilai selain `'true'` menjadikan `/` langsung ke beranda crowdfunding dan menonaktifkan rute website (`404`).
+- **Peran panel:** Hanya `SUPERADMIN` dan `WEBSITE_EDITOR` di tabel `admins`. Donatur (`donors`) dan afiliasi (`affiliates`) adalah tabel serta sesi terpisah.
 
-## Keamanan
+## Database & Query
 
-- Jangan memulihkan cookie sesi UI CRM, fallback admin-pertama, `password_hash`, atau peran `FINANCE`.
-- `getPanelSession` hanya membaca cookie `digidonasi.panel`. Cookie donor, afiliasi, dan penanda UI lawas tidak berlaku. Tidak ada fallback admin pertama.
-- Tiga pintu: `/masuk`, `/panel/login`, `/afiliasi/masuk`. `/login` mengalihkan ke `/panel/login`. `AUTH_PROVIDER=mock` hanya untuk uji. Login Google sungguhan belum tervalidasi.
-- Shell admin tetap pada `app/(dashboard)`. `PANEL_SHELL_FIXTURE` bukan sesi.
-- Jangan menyalin rahasia, `DATABASE_URL` produksi, atau data Darul Hikam ke repo, seed, atau log.
-- Bootstrap superadmin hanya jika `BOOTSTRAP_ADMIN_OPT_IN=true` bersama nama dan email dari env. Jangan menulis email orang ke dokumen.
+- **Drizzle hanya untuk migrasi & seed:** `npm run db:migrate` dan `npm run db:seed`. Jangan gunakan Drizzle ORM untuk query di aplikasi atau API.
+- **SQL berparameter:** Semua query aplikasi menggunakan `query()` di `lib/db.ts` (publik) atau `lib/panel/db.ts` (panel).
 
-## Sumber kebenaran
+## Keamanan & White-Label
 
-1. Perilaku yang sudah dipasang: kode dan `docs/PROGRESS.md`.
-2. Skema: `lib/db/migrations/0000_foundation.sql`. Peta: `docs/SCHEMA-MAP.md`.
-3. Seed: `drizzle/seed.sql`. Ulangi tidak menimpa baris yang `seed_untouched = false`. `campaign_stats` tidak direset.
-4. SQL aplikasi berparameter lewat `dbQuery`. Drizzle tidak dipakai untuk query.
+- Jangan menuliskan nama lembaga tertentu (seperti Darul Hikam atau Lentera Barokah) secara hardcode di kode. Identitas lembaga dibaca dari `ngo_configs`.
+- Jangan menyimpan rahasia, `DATABASE_URL` produksi, atau data klien di repo.
 
-## Alur hari berikutnya
-
-Satu PR kohesif per hari, 9–14 November 2026, hanya setelah paket sebelumnya hijau dan penggabungannya disetujui. Tidak ada auto-merge dan tidak ada loncatan hari. Hari 2 autentikasi. Hari 3 donasi. Hari 4 pembayaran. Hari 5 afiliasi. Hari 6 website. Hari 7 kandidat rilis. Berhenti jika pemblokir berulang.
-
-Perintah lokal: `npm run db:migrate`, `npm run db:seed`, `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.
+Perintah lokal: `npm run db:migrate`, `npm run db:seed`, `npm run typecheck`, `npm run lint`, `npm run build`.

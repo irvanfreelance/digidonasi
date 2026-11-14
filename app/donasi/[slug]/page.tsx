@@ -1,74 +1,155 @@
+import Image from "next/image";
 import Link from "next/link";
+import CheckoutButton from "@/components/CheckoutButton";
 import { notFound } from "next/navigation";
-import { CheckoutForm } from "@/components/public/checkout-form";
-import { CampaignArt, RichCopy, daysRemaining, progressPercent, rupiah } from "@/components/public/campaign-card";
-import { DonationShell } from "@/components/public/donation-shell";
-import { dbQuery } from "@/lib/db";
-import { getPublicCampaign } from "@/lib/donasi/catalog";
+import { ChevronLeft } from "lucide-react";
+import ShareButton from "@/components/ShareButton";
+import AffiliateTracker from "@/components/AffiliateTracker";
+import CampaignTabs from "@/components/CampaignTabs";
+import LiveCampaignStats from "@/components/LiveCampaignStats";
+import type { Metadata } from "next";
+import { getCampaignBySlug, getAllCampaigns } from "@/lib/campaigns";
+import { getBaseUrl } from "@/lib/utils";
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
-export default async function CampaignPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  let detail: Awaited<ReturnType<typeof getPublicCampaign>> = null;
-  try {
-    detail = await getPublicCampaign(dbQuery, slug);
-  } catch {
-    detail = null;
+export async function generateMetadata(
+  props: { params: Promise<{ slug: string }> }
+): Promise<Metadata> {
+  const params = await props.params;
+  const campaign = await getCampaignDetail(params.slug);
+
+  if (!campaign) {
+    return { title: 'Kampanye Tidak Ditemukan' };
   }
-  if (!detail) notFound();
-  const campaign = detail.campaign;
-  const collected = Number(campaign.collected_amount ?? 0);
-  const target = campaign.target_amount == null ? null : Number(campaign.target_amount);
-  const percent = progressPercent(collected, target, Boolean(campaign.has_no_target));
-  const days = daysRemaining(campaign.end_date as string | null, Boolean(campaign.has_no_time_limit));
+
+  const title = campaign.title;
+  const description = campaign.description || `Mari bersama wujudkan kebaikan melalui kampanye ${campaign.title}`;
+  const imageUrl = campaign.image_url || '/placeholder.jpg';
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: title }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [imageUrl],
+    },
+  };
+}
+
+async function getCampaignDetail(slug: string) {
+  try {
+    // DIRECT SERVICE CALL: Supercepat anti-delay, bypasses HTTP overhead
+    const campaign = await getCampaignBySlug(slug);
+    return campaign;
+  } catch (error) {
+    console.error(`Error in getCampaignDetail for ${slug}:`, error);
+    return null;
+  }
+}
+
+// Pre-generate the top 20 campaigns as static pages at build time
+export async function generateStaticParams() {
+  try {
+    const campaigns = await getAllCampaigns();
+    return campaigns.slice(0, 20).map((c: any) => ({ slug: c.slug }));
+  } catch (error) {
+    console.error('generateStaticParams error:', error);
+    return [];
+  }
+}
+
+export default async function CampaignDetail(props: {
+  params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ aff?: string }>;
+}) {
+  const params = await props.params;
+  const searchParams = await props.searchParams;
+  const affCode = searchParams?.aff?.trim() || null;
+  const campaign = await getCampaignDetail(params.slug);
+
+  if (!campaign) notFound();
+
+  let btnLabel = "Donasi Sekarang";
+  if (campaign.is_zakat) btnLabel = "Tunaikan Zakat";
+  if (campaign.is_qurban) btnLabel = "Qurban Sekarang";
+
   return (
-    <DonationShell>
-      <Link href="/donasi" className="block px-5 pt-4 text-[13px] font-semibold text-teal-700">Kembali ke katalog</Link>
-      <div className="px-5 pt-3">
-        <CampaignArt
-          row={{ slug, title: String(campaign.title), image_url: campaign.image_url as string, image_alt: campaign.image_alt as string, category: String(campaign.category_name) }}
-          className="h-44 w-full rounded-2xl"
-        />
-        <div className="mt-3 text-[10px] font-bold uppercase tracking-wide text-teal-600">{String(campaign.category_name)}</div>
-        <h1 className="mt-1 text-xl leading-tight font-extrabold text-gray-900">{String(campaign.title)}</h1>
-        <p className="mt-2 text-sm leading-relaxed text-gray-600">{String(campaign.description)}</p>
-        <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
-          <div className="text-sm font-bold text-gray-800">{rupiah(collected)}</div>
-          {Number(campaign.donor_count) > 0 ? (
-            <div className="text-[11px] text-gray-500">{Number(campaign.donor_count).toLocaleString("id-ID")} donatur</div>
-          ) : null}
-          {percent == null ? (
-            <div className="mt-1 text-[11px] font-semibold text-teal-700">Tanpa target</div>
-          ) : (
-            <>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full bg-teal-600" style={{ width: `${percent}%` }} />
-              </div>
-              <div className="mt-1 flex justify-between text-[10px] font-bold text-teal-700">
-                <span>{days == null ? "Tanpa batas" : `Sisa ${days} hari`}</span>
-                <span>{percent}%</span>
-              </div>
-            </>
-          )}
+    <div className="flex flex-col h-full bg-white relative">
+      {/* Capture ?aff= affiliate code — resolved client-side, no UI */}
+      <AffiliateTracker campaignId={campaign.id} affCode={affCode} />
+
+      <div className="relative h-72 w-full shrink-0 bg-gray-900 overflow-hidden">
+        {/* Blurred Background Layer for "Whole Image" aesthetic */}
+        <div className="absolute inset-0 scale-110 blur-2xl opacity-40">
+          <Image
+            src={campaign.image_url || '/placeholder.jpg'}
+            alt=""
+            fill
+            className="object-cover"
+            priority
+          />
         </div>
-        <ul className="mt-4 grid gap-2">
-          {detail.updates.map((item) => (
-            <li key={String(item.title)} className="rounded-2xl bg-white p-3 text-[13px] shadow-sm">
-              <strong>{String(item.title)}</strong>
-              <RichCopy text={String(item.body)} />
-            </li>
-          ))}
-        </ul>
-        <CheckoutForm
-          slug={slug}
-          minimum={Number(campaign.minimum_amount)}
-          fixed={Boolean(campaign.is_fixed_amount) && !campaign.is_qurban}
-          qurban={Boolean(campaign.is_qurban)}
-          variants={detail.variants as { id: string; name: string; price_rupiah: string; names_per_qty: number }[]}
-          bundles={detail.bundles as { slug: string; title: string; qty: number }[]}
+        
+        {/* Main "Utuh" (Whole) Image */}
+        <Image
+          src={campaign.image_url || '/placeholder.jpg'}
+          alt={campaign.title}
+          fill
+          sizes="(max-width: 768px) 100vw, 600px"
+          className="object-contain relative z-10"
+          priority
+          quality={90}
+        />
+        
+        <div className="absolute top-0 w-full p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent z-20">
+          <Link href="/donasi" className="w-10 h-10 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20 hover:bg-black/40 transition-all">
+            <ChevronLeft size={24} />
+          </Link>
+          <ShareButton
+            url={`${getBaseUrl()}/donasi/${campaign.slug}`}
+            title={campaign.title}
+            className="w-10 h-10 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20 hover:bg-black/40 transition-all"
+          />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-5 pt-5 pb-40 -mt-5 bg-white rounded-t-2xl relative z-10 no-scrollbar shadow-lg animate-in slide-in-from-bottom-4 fade-in duration-500">
+        <div className="w-12 h-1.5 bg-gray-100 rounded-full mx-auto mb-4" />
+        <div className="bg-brand-50 text-brand-700 text-xs font-bold px-3 py-1 rounded-full inline-block mb-3">
+          {campaign.category_name}
+        </div>
+        <h1 className="text-xl font-bold text-gray-800 leading-snug mb-3">{campaign.title}</h1>
+
+        <LiveCampaignStats
+          slug={campaign.slug}
+          initialCollected={Number(campaign.collected)}
+          initialDonors={Number(campaign.donors)}
+          hasNoTarget={!!campaign.has_no_target}
+          targetAmount={Number(campaign.target_amount)}
+          hasNoTimeLimit={!!campaign.has_no_time_limit}
+          daysLeft={campaign.daysLeft}
+        />
+
+        {/* Client-side instant tab switcher — no URL navigation, no animations */}
+        <CampaignTabs
+          slug={params.slug}
+          description={campaign.description}
+          updates={campaign.updates}
         />
       </div>
-    </DonationShell>
+
+      <div className="sticky bottom-0 w-full bg-white/95 backdrop-blur-sm p-4 pb-6 border-t border-gray-100 z-30">
+        <CheckoutButton href={`/donasi/${campaign.slug}/checkout`} label={btnLabel} />
+      </div>
+    </div>
   );
 }

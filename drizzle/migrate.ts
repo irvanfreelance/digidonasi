@@ -1,18 +1,31 @@
 import { config } from "dotenv";
-import { join } from "node:path";
-import { applySqlFile, withTransaction } from "@/lib/db/run-sql";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { sql } from "drizzle-orm";
+import pg from "pg";
 
 config({ path: ".env.local" });
 config();
 
+/**
+ * Drizzle hanya dipakai untuk migrasi & seed. Query aplikasi tetap SQL mentah (lib/db.ts).
+ * `npm run db:migrate -- --reset` mengosongkan schema public lebih dulu (hanya untuk basis baru).
+ */
 async function main() {
-  const url = process.env.DATABASE_URL;
+  const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL wajib untuk db:migrate");
-  const file = join(process.cwd(), "lib/db/migrations/0000_foundation.sql");
-  await withTransaction(url, async (client) => {
-    await applySqlFile(client, file);
-  });
-  console.log("Migrasi 0000_foundation selesai.");
+  const pool = new pg.Pool({ connectionString: url, max: 1 });
+  const db = drizzle(pool);
+  try {
+    if (process.argv.includes("--reset")) {
+      await db.execute(sql.raw("DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public;"));
+      console.log("Schema public dikosongkan.");
+    }
+    await migrate(db, { migrationsFolder: "./drizzle/migrations" });
+    console.log("Migrasi selesai.");
+  } finally {
+    await pool.end();
+  }
 }
 
 main().catch((error) => {

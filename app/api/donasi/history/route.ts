@@ -1,25 +1,45 @@
-import { NextResponse } from "next/server";
-import { blocked, decide } from "@/lib/auth/http";
-import { dbQuery } from "@/lib/db";
-import { donorHistory } from "@/lib/donasi/catalog";
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { query } from '@/lib/db';
 
-export async function GET(request: Request) {
-  const decision = decide(request);
-  const denied = blocked(decision);
-  if (denied) return denied;
-  const url = new URL(request.url);
-  const donorId = decision.kind === "allow" ? decision.session?.id : null;
-  if (!donorId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const LIMIT = 5;
+
+export async function GET(request: NextRequest) {
   try {
-    const result = await donorHistory(dbQuery, donorId, {
-      page: Number(url.searchParams.get("page") || "1"),
-      pageSize: Number(url.searchParams.get("pageSize") || "6"),
-    });
-    return NextResponse.json(result);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("DATABASE_URL")) {
-      return NextResponse.json({ rows: [], page: 1, pageSize: 6, total: 0 });
+    const session = await getServerSession(authOptions);
+    if (!session || !(session.user as any)?.id) {
+      return NextResponse.json({ status: 'error', message: 'Unauthorized' }, { status: 401 });
     }
-    throw error;
+
+    const donorId = (session.user as any).id;
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
+    const offset = (page - 1) * LIMIT;
+
+    const rows = await query(
+      `SELECT i.id, i.invoice_code, i.total_amount, i.status, i.created_at,
+              c.title as campaign_title
+       FROM invoices i
+       LEFT JOIN transactions t ON t.invoice_id = i.id
+       LEFT JOIN campaigns c ON c.id = t.campaign_id
+       WHERE i.donor_id = $1
+       ORDER BY i.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [donorId, LIMIT, offset]
+    );
+
+    // Check if more pages exist
+    const countRes = await query(
+      `SELECT COUNT(*) as total FROM invoices WHERE donor_id = $1`,
+      [donorId]
+    );
+    const total = parseInt(countRes[0]?.total ?? '0', 10);
+    const hasMore = offset + LIMIT < total;
+
+    return NextResponse.json({ status: 'success', data: rows, hasMore, total });
+  } catch (error: any) {
+    console.error('[donasi/history] error:', error);
+    return NextResponse.json({ status: 'error', message: error.message }, { status: 500 });
   }
 }

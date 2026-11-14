@@ -1,34 +1,181 @@
 import type { Metadata } from "next";
-import { Source_Sans_3 } from "next/font/google";
-import { Toaster } from "sonner";
-import { ConfirmHost } from "@/components/ui/confirm-toast";
-import { loadPublicOrg } from "@/lib/org-public";
+import { Source_Sans_3, Cabin, Albert_Sans } from "next/font/google";
 import "./globals.css";
+import BottomNav from "@/components/layout/BottomNav";
+import { query } from "@/lib/db";
+import { redis } from "@/lib/redis";
+import { getFooterPrograms } from "@/lib/campaigns";
+import TrackingScripts from "@/components/TrackingScripts";
+import { Providers } from "@/components/Providers";
 
-const sourceSans = Source_Sans_3({
+import LayoutWrapper from "@/components/LayoutWrapper";
+import { websiteEnabled } from "@/lib/env";
+
+const sourceSansPro = Source_Sans_3({
+  variable: "--font-source-sans-pro",
   subsets: ["latin"],
-  variable: "--font-source-sans",
-  weight: ["400", "600", "700"],
 });
 
-export const dynamic = "force-dynamic";
+const fontCabin = Cabin({
+  variable: "--font-cabin",
+  subsets: ["latin"],
+});
+
+const fontAlbert = Albert_Sans({
+  variable: "--font-albert",
+  subsets: ["latin"],
+});
 
 export async function generateMetadata(): Promise<Metadata> {
-  const org = await loadPublicOrg();
+  let title = "LAZ Darul Hikam";
+  let favicon = "/favicon.ico";
+  let siteName = "LAZ Darul Hikam";
+  try {
+    const cached = await redis.get('ngo:configs:global_v4');
+    let configs: any = null;
+    
+    if (cached) {
+      configs = typeof cached === 'string' ? JSON.parse(cached) : cached;
+    } else {
+      const res = await query('SELECT ngo_name, logo_url, primary_color, favicon_url, meta_pixel_id, tiktok_pixel_id, google_ads_id, google_analytic_id, short_description, address, whatsapp_number, facebook_url, instagram_url FROM ngo_configs LIMIT 1');
+      if (res.length > 0) {
+        configs = res[0];
+        redis.set('ngo:configs:global_v4', JSON.stringify(configs), { ex: 3600 }).catch(() => {});
+      }
+    }
+
+    if (configs?.ngo_name) {
+      title = configs.ngo_name;
+      siteName = configs.ngo_name;
+    }
+    if (configs?.favicon_url) {
+      favicon = configs.favicon_url;
+    }
+  } catch (e) {
+    console.error("Failed to generate metadata", e);
+  }
+
+  const rawBaseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL;
+  const baseUrl = rawBaseUrl && rawBaseUrl.trim() !== ''
+    ? (rawBaseUrl.startsWith('http') ? rawBaseUrl : `https://${rawBaseUrl}`)
+    : 'http://localhost:3000';
+
   return {
-    title: org.nama,
-    description: org.tagline,
-    icons: { icon: org.favicon_url || "/brand/favicon.svg" },
+    metadataBase: new URL(baseUrl),
+    title: {
+      default: title,
+      template: `%s | ${siteName}`
+    },
+    description: `Platform Donasi Publik ${siteName}`,
+    icons: {
+      icon: favicon
+    },
+    openGraph: {
+      title: title,
+      description: `Platform Donasi Publik ${siteName}`,
+      url: '/',
+      siteName: siteName,
+      locale: 'id_ID',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: title,
+      description: `Platform Donasi Publik ${siteName}`,
+    },
+    verification: {
+      google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || '',
+    },
   };
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  let configs = null;
+  let pixelEvents = null;
+  let footerPrograms: any[] = [];
+  try {
+    // Cache ngo_configs in Redis – avoid DB hit on every render
+    const configCacheKey = 'ngo:configs:global_v4';
+    const pixelCacheKey = 'ngo:pixel_events:global_v1';
+    
+    const [cachedConfig, cachedPixels] = await Promise.all([
+      redis.get(configCacheKey),
+      redis.get(pixelCacheKey)
+    ]);
+    
+    if (cachedConfig) {
+      configs = typeof cachedConfig === 'string' ? JSON.parse(cachedConfig) : cachedConfig;
+    } else {
+      const res = await query('SELECT ngo_name, logo_url, primary_color, favicon_url, meta_pixel_id, tiktok_pixel_id, google_ads_id, google_analytic_id, video_url, short_description, address, whatsapp_number, facebook_url, instagram_url FROM ngo_configs LIMIT 1');
+      if (res.length > 0) {
+        configs = res[0];
+        // Cache for 1 hour
+        redis.set(configCacheKey, JSON.stringify(configs), { ex: 3600 }).catch(() => {});
+      }
+    }
+
+    if (cachedPixels) {
+      pixelEvents = typeof cachedPixels === 'string' ? JSON.parse(cachedPixels) : cachedPixels;
+    } else {
+      const resEvents = await query('SELECT screen_name, meta_event, tiktok_event, google_event FROM pixel_events WHERE is_active = true');
+      if (resEvents && resEvents.length > 0) {
+        pixelEvents = resEvents;
+        // Cache for 1 hour
+        redis.set(pixelCacheKey, JSON.stringify(pixelEvents), { ex: 3600 }).catch(() => {});
+      }
+    }
+  } catch (e) {
+    console.error("Failed to fetch ngo_configs or pixel_events for tracking", e);
+  }
+
+  try {
+    footerPrograms = (await getFooterPrograms()) as any[];
+  } catch (e) {
+    console.error("Failed to fetch footer programs", e);
+  }
+
   return (
-    <html lang="id" className={`${sourceSans.variable} h-full antialiased`}>
-      <body className="min-h-full">
-        {children}
-        <Toaster richColors position="top-right" />
-        <ConfirmHost />
+    <html lang="id" className={`${sourceSansPro.variable} ${fontCabin.variable} ${fontAlbert.variable} h-full antialiased`}>
+      <head>
+        {/* Preconnect to Vercel Blob & Neon for faster cold starts */}
+        <link rel="preconnect" href="https://public.blob.vercel-storage.com" />
+        <link rel="dns-prefetch" href="https://public.blob.vercel-storage.com" />
+        {configs?.primary_color && (
+          <style dangerouslySetInnerHTML={{ __html: `
+            :root {
+              --color-teal-50: ${configs.primary_color}10;
+              --color-teal-100: ${configs.primary_color}20;
+              --color-teal-200: ${configs.primary_color}30;
+              --color-teal-300: ${configs.primary_color}50;
+              --color-teal-400: ${configs.primary_color}80;
+              --color-teal-500: ${configs.primary_color};
+              --color-teal-600: ${configs.primary_color};
+              --color-teal-700: ${configs.primary_color};
+              --color-teal-800: ${configs.primary_color};
+              --color-teal-900: ${configs.primary_color};
+            }
+          ` }} />
+        )}
+      </head>
+      <body className="h-full flex flex-col bg-slate-50 font-sans">
+        {configs && (
+          <TrackingScripts 
+            metaPixelId={configs.meta_pixel_id} 
+            tiktokPixelId={configs.tiktok_pixel_id} 
+            googleAdsId={configs.google_ads_id}
+            googleAnalyticId={configs.google_analytic_id}
+            pixelEvents={pixelEvents}
+          />
+        )}
+        <Providers>
+          <LayoutWrapper configs={configs} footerPrograms={footerPrograms} websiteEnabled={websiteEnabled()}>
+            {children}
+          </LayoutWrapper>
+        </Providers>
       </body>
     </html>
   );

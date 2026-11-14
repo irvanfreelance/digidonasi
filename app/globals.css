@@ -1,38 +1,158 @@
 @import "tailwindcss";
 
-:root {
-  --background: #f4f5f7;
-  --foreground: #1a1a1a;
-  --primary: #01665a;
-  --sidebar: #01665a;
-  --accent: #2e8b7a;
+@theme {
+  --font-sans: var(--font-source-sans-pro);
+  --font-cabin: var(--font-cabin);
+  --font-albert: var(--font-albert);
+  --color-background: #ffffff;
+  --color-foreground: #171717;
+
+  --color-laz-biru: #3268C3;
+  --color-laz-birudk: #1f4a9c;
+  --color-laz-birult: #e8f0fb;
+  --color-laz-birumd: #5585d4;
+  --color-laz-hijau: #1a6b3c;
+  --color-laz-hijault: #e8f5ee;
+  --color-laz-emas: #c9892a;
+  --color-laz-emaslt: #fdf3e3;
+  --color-laz-bg: #f4f6fb;
+  --color-laz-cream: #f8fafc;
+  --color-laz-white: #ffffff;
+  --color-laz-border: #e2e8f0;
+  --color-laz-teks: #0f1b35;
+  --color-laz-teksmd: #475569;
+  --color-laz-teksmt: #94a3b8;
+  --color-laz-red: #dc2626;
+  --color-laz-redlt: #fef2f2;
+
+  --color-brand-50: #f2f8ea;
+  --color-brand-100: #e4f0d4;
+  --color-brand-200: #cbe4b3;
+  --color-brand-300: #b3d68f;
+  --color-brand-400: #9bc873;
+  --color-brand-500: #83b64e;
+  --color-brand-600: #6ea341;
+  --color-brand-700: #558033;
+  --color-brand-800: #416426;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: var(--primary);
-  --font-sans: var(--font-source-sans);
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cta-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--pulse-color, rgba(131, 182, 78, 0.45)); }
+  50% { box-shadow: 0 0 0 10px var(--pulse-color-fade, rgba(131, 182, 78, 0)); }
+}
+
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@layer utilities {
+  .animate-marquee {
+    animation: marquee 90s linear infinite;
+  }
+
+  /* Scroll-reveal: toggled by IntersectionObserver in <Reveal>. Starts hidden
+     so content isn't invisible if JS fails to load. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  }
+  .reveal.reveal-in {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .hover-lift {
+    transition: transform 0.25s ease-out, box-shadow 0.25s ease-out;
+  }
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px -8px rgba(15, 27, 53, 0.15);
+  }
+
+  .cta-pulse {
+    animation: cta-pulse 2.2s ease-out infinite;
+  }
+
+  .animate-float-soft {
+    animation: float-soft 3.5s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+    .cta-pulse, .animate-float-soft, .animate-marquee {
+      animation: none;
+    }
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+  
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .news-content p, .campaign-description p {
+    margin-bottom: 0.625rem;
+  }
+  .news-content b, .news-content strong, .campaign-description b, .campaign-description strong {
+    font-weight: 700;
+  }
+  .news-content ul, .campaign-description ul {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .news-content ol, .campaign-description ol {
+    list-style-type: decimal;
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  .news-content li, .campaign-description li {
+    margin-bottom: 0.25rem;
+  }
+  .news-content table, .campaign-description table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+    font-size: 0.75rem;
+  }
+  .news-content th, .news-content td, .campaign-description th, .campaign-description td {
+    border: 1px solid #e2e8f0;
+    padding: 0.5rem;
+    text-align: left;
+  }
+  .news-content img, .campaign-description img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin: 0.75rem 0;
+  }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-source-sans), "Source Sans Pro", sans-serif;
-  font-size: 14px;
-}
-
-a { text-decoration: none; }
-a:not([class*="bg-"]) { color: inherit; }
-
-input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]):not([type="range"]),
-textarea {
-  font-weight: 400;
-  color: #5c5c5c;
-}
-
-input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]):not([type="range"]):not([class*="border-0"]),
-textarea:not([class*="border-0"]) {
-  border: 1px solid #e8e8e8;
-  border-radius: 1rem;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
 }
